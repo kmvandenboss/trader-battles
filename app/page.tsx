@@ -182,7 +182,14 @@ export default async function HomePage() {
                   : null}
               </span>
             </div>
-            <RatingSparkline data={sparkline} />
+            <RatingSparkline
+              data={sparkline}
+              ariaLabel={
+                ratingHistory.length > 0
+                  ? `Season rating trend from ${ratingHistory[0].previousRating.toLocaleString("en-US")} to ${profile.rating.toLocaleString("en-US")}.`
+                  : "Season rating trend."
+              }
+            />
             <Button size="lg" className="mt-3 w-full" asChild>
               <Link href="/matchmaking">
                 <Swords data-icon="inline-start" aria-hidden />
@@ -306,7 +313,7 @@ export default async function HomePage() {
                 icon={TrendingUp}
                 label="Performance"
                 value={String(profile.performanceScore)}
-                hint="Normalized returns"
+                hint="Normalized execution"
               />
               <InsightCard
                 icon={Trophy}

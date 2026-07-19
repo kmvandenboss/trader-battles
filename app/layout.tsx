@@ -4,6 +4,8 @@ import "./globals.css";
 import { DemoNotice } from "@/components/layout/demo-notice";
 import { SiteHeader } from "@/components/layout/site-header";
 import { SiteFooter } from "@/components/layout/site-footer";
+import { getRepositories } from "@/lib/data/repositories";
+import type { HeaderNotification } from "@/components/layout/notifications-menu";
 
 const geistSans = Geist({
   variable: "--font-geist-sans",
@@ -24,11 +26,27 @@ export const metadata: Metadata = {
     "Competitive 1-on-1 battles for futures traders, scored on normalized performance. Interactive concept demo — all data is simulated.",
 };
 
-export default function RootLayout({
+export default async function RootLayout({
   children,
 }: Readonly<{
   children: React.ReactNode;
 }>) {
+  // Notifications are read server-side (repositories are server-only) and
+  // handed to the client header as a plain serializable list.
+  const { traders, notifications } = getRepositories();
+  const demo = await traders.getDemoTrader();
+  const notes = await notifications.listForUser(demo.user.id);
+  const unreadCount = await notifications.countUnread(demo.user.id);
+  const headerNotifications: HeaderNotification[] = notes.map((n) => ({
+    id: n.id,
+    type: n.type,
+    title: n.title,
+    body: n.body,
+    href: n.href,
+    read: n.read,
+    createdAt: n.createdAt,
+  }));
+
   return (
     <html
       lang="en"
@@ -36,7 +54,10 @@ export default function RootLayout({
     >
       <body className="flex min-h-svh flex-col bg-background text-foreground">
         <DemoNotice />
-        <SiteHeader />
+        <SiteHeader
+          notifications={headerNotifications}
+          unreadCount={unreadCount}
+        />
         <main className="mx-auto w-full max-w-7xl flex-1 px-4 py-8 sm:px-6 lg:px-8">
           {children}
         </main>

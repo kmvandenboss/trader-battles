@@ -13,54 +13,64 @@
 
 ## ▶ NEXT ACTION (for the session picking this up)
 
-Launch **Phase 7 — Leaderboards, profiles, leagues, match history** (KICKOFF.md Phase 7).
-Mostly `frontend-ui`; the repository surfaces already exist (Phase 1) — pull in `data-seed`
-ONLY if a read model is genuinely missing. Everything the session needs:
+Launch **Phase 8 — Docs, then a full QA pass** (KICKOFF.md Phase 8). This is the last build
+phase before polish. Two parts:
 
-- **Deliverables** per KICKOFF.md, all from `getRepositories()` seed data (44 traders, 6 firms,
-  190 battles): (1) **Leaderboards** at `/leaderboards` (replaces PagePlaceholder) — filters +
-  columns per brief; use `leaderboards.query({ league?, market?, firmSlug?, limit, offset })`
-  → `{ entries: LeaderboardEntry[] (rank, trader, winRate), total }` and
-  `leaderboards.getStanding(userId)` for the demo user's row/percentiles. (2) **Trader profiles**
-  at `/profile` (demo user) — and ideally a dynamic `/profile/[userId]` (or `/traders/[id]`) for
-  any seeded trader: rating history chart (`traders.getRatingHistory` — 29 pts for KevinV),
-  season/lifetime record, badges (`achievements.listForUser` → 10 for KevinV; `listCatalog` for
-  the full set), primary/secondary markets, firm, style. Reuse `components/dashboard/rating-sparkline.tsx`
-  (generalize it). (3) **Firm profiles** (lightweight) at `/leagues` or a `/firms/[slug]` route —
-  `firms.list()` → `FirmStandings[]` (activeTraders, averageRating, weeklyWins/Losses, topTraders,
-  mostTradedMarkets); `firms.getFirmVsFirm(slug)`. (4) **League system** — Bronze→Elite w/
-  divisions + promotion/demotion progress; rating bands live in `lib/data/leagues.ts`
-  (150/league, 50/division). (5) **Match History** at `/history` (replaces PagePlaceholder) —
-  searchable/filterable via `battles.listForUser(userId, BattleHistoryFilter)` (result/market/
-  battleType/battleWindow/opponentUserId/from/to/limit). Each row links to `/battle/review`
-  (currently the review screen is hardcoded to the showcase battle — see LOW below to
-  parameterize it by battleId for real history review). (6) **Badges/achievements display** +
-  (7) **notifications dropdown** in the header (`notifications.listForUser`/`countUnread`; the
-  site-header currently has no notifications UI).
-- **Reuse what Phase 6 built**: `components/battle/showcase.ts` pattern (server loader →
-  serializable view model → client charts), `components/battle-review/pair-line-chart.tsx`
-  (two-series Recharts, `valueKind` prop), `components/battle/{league-badge,trader-avatar,
-  stat-pill,final-scorecard,component-breakdown}.tsx`, `format.ts` helpers.
-- **Parameterize the review screen (recommended early)**: `/battle/review` + `/battle/result`
-  currently always load `battles.getLatestForUser(demoUserId)` (the showcase battle-189). For
-  Match-History "review this battle" to work, generalize `loadShowcaseBattle()` to
-  `loadBattleView(battleId)` (falls back to showcase) and add `/history/[battleId]` or accept a
-  `?battle=` param. Keep sourcing via repositories (NO server-side engine — Turbopack gotcha).
-- Rules: same as always — no gambling language, no profitability claims, UI computes NO
-  scores/ratings (read via repositories / pure lib helpers only), Simulated Demo Data labels,
-  strong types, no `any`, deterministic. Firms stay clearly demo-labeled (no real partnership).
-- Verify: build + lint + test (139 green pre-phase), dev-server curl the new/replaced routes +
-  `/`, `/battle/result`, `/battle/review`, `/matchmaking`, `/battle` regressions. Run
-  `qa-reviewer` after (scope: the new diff).
-- After the phase: commit, update this doc (mark Phase 7 done, decisions + QA notes), proceed
-  to Phase 8 (docs + full QA) per KICKOFF.md.
+1. **Docs** (use the `docs-writer` agent). Write, describing what the code ACTUALLY does (not
+   aspirational) — read the codebase first:
+   - `README.md` — what Trader Battles is, the one-line pitch, "100% simulated demo data"
+     framing, quickstart (`npm i` → `npm run dev`; scripts: dev/build/lint/seed/test, plus
+     `npm run battle -- <scenario-id>`), route map (14 routes — see below), Vercel deploy
+     notes (no DB / no paid services), and the non-negotiable rules summary.
+   - `docs/architecture.md` — the one-directional data flow (mock provider → adapter →
+     normalized execution event → validate/dedupe → position ledger → battle metrics → score →
+     snapshot → UI). Document the module boundaries (`lib/integrations`, `lib/executions`,
+     `lib/battles`, `lib/scoring`, `lib/ratings`, `lib/data/repositories`), the repository
+     interface as the swap seam for real Postgres, and the `BattleClock`/`BattleScriptSource`
+     client-tick abstraction as the SSE/live-stream seam.
+   - `docs/scoring.md` — the 0–100 score, four components (Performance 40 / Risk 25 /
+     Discipline 20 / Consistency 15, configurable), penalties, the Elo-style rating change
+     (K=32, margin multiplier, violation dampening), and the worked example. **Honest-arithmetic
+     caveat**: strict 40/25/20/15 weights give **83.55 / 74.0**, not the brief's published
+     83.9/73.6 — document this (already handled in `lib/scoring/workedExample.ts`, ±1.0 seed
+     tolerance).
+   - `docs/integration-roadmap.md` — how NinjaTrader/Tradovate/Rithmic plug in behind
+     `TradingIntegrationProvider` (`lib/integrations/types.ts`) and the repository interface with
+     ZERO changes to scoring/battles/UI; the provider stubs under `lib/integrations/providers/*`.
+   - `docs/integrity-and-verification.md` — verification states (`SIMULATED` today →
+     `PROVIDER_VERIFIED` future), the "Simulated Demo Data" labeling policy, dedupe/audit trail
+     (`rawPayload`, one intentional duplicate per battle), determinism (seed `0x7b17c0de`).
+2. **Full QA** (use the `qa-reviewer` agent) — against the FULL MVP acceptance criteria in the
+   brief (not just a phase diff) + all non-negotiable rules. Produce a prioritized fix list.
+   Then fix any BLOCKER/HIGH, re-verify, commit.
 
-### Deferred Phase 6 polish (fold into Phase 7 or Phase 11)
-- **Chart a11y** (QA LOW): `rating-sparkline.tsx` + `battle-review/pair-line-chart.tsx` have no
-  text alternative — add an `aria-label` summarizing start→end. Consistent with the existing
-  live-battle charts (no regression), so batch with a later a11y pass.
-- Review/result screens are hardcoded to the showcase battle — parameterize by battleId when
-  Match History lands (see NEXT ACTION above).
+- Verify gates (must stay green): `npm run build` (14 routes), `npm run lint`, `npm test`
+  (139/139). Docs are prose-only — no code changes expected, so tests/build shouldn't move.
+- After the phase: commit, update this doc (mark Phase 8 done), then Phase 9
+  (leaderboards/profiles/leagues/history already shipped in Phase 7 — Phase 9 in KICKOFF is
+  folded in; the remaining KICKOFF items are Phase 10 docs polish already covered here and
+  **Phase 11 Polish**). Effectively after Phase 8 the app is feature-complete; remaining work is
+  the deferred-polish backlog below.
+
+### Deferred polish backlog (fold into Phase 11 Polish)
+- **Chart a11y**: `battle-review/pair-line-chart.tsx` still has no text alternative (the Phase 7
+  rating charts + dashboard sparkline now do — `role="img"` + summarizing `aria-label`). Add the
+  same to `pair-line-chart.tsx` and the live-battle charts for consistency.
+- **Phase 7 QA LOWs** (cosmetic, not fixed): (a) `components/layout/notifications-menu.tsx:73`
+  `formatDateTime` omits the year → older seeded notifications show month/day only; (b)
+  `app/firms/[slug]/page.tsx:164` uses `MARKET_LABELS[m].split(" · ")[1]` to show the market
+  descriptor — relies on the " · " label shape; a dedicated market-name accessor would be safer.
+- **Phase 5 LOWs** (still open): nav has "Find a Battle" + "Live Battle" as siblings (fine post
+  Phase-6 dashboard CTA, revisit in polish); `app/matchmaking/page.tsx` hardcodes
+  `probeElapsedMs = 600_000` — an engine-side `isMarketMatchable(request, queue)` helper would
+  remove the timing assumption.
+- **Phase 4 MEDIUM** (engine-side): expose an engine-computed *projected* pre-final rating
+  movement on the stepping API so the live header can show "±N rating" before the final bell
+  (must NOT be computed client-side — Rule 4). Currently the header shows a neutral
+  "Rating on the line" label until the engine's `finalResult.ratingChange` lands.
+- **Phase 4 LOWs**: Demo Controls shows disabled "Resume" at FINAL (suggest "Replay"/Reset hint);
+  end overlay (z-40) covers Demo Controls (z-30) so presenter must dismiss before Reset;
+  `BattleClockOutput.progress` exposed but unused by the screen.
 
 ## Phase status
 
@@ -72,9 +82,9 @@ ONLY if a read model is genuinely missing. Everything the session needs:
 | 3 — Mock provider / pipeline / battle engine | ✅ done | `015f225` |
 | 4 — Live Battle screen | ✅ done | `bcba1cb` |
 | 5 — Matchmaking flow | ✅ done | `3216e43` |
-| 6 — Dashboard, result, review | ✅ done | _this commit_ |
-| 7 — Leaderboards, profiles, leagues, history | ⏳ next | |
-| 8 — Docs + full QA | pending | |
+| 6 — Dashboard, result, review | ✅ done | `5554768` |
+| 7 — Leaderboards, profiles, leagues, history | ✅ done | _this commit_ |
+| 8 — Docs + full QA | ⏳ next | |
 
 ## Decisions made so far (beyond CLAUDE.md's locked ones)
 
@@ -251,6 +261,60 @@ ONLY if a read model is genuinely missing. Everything the session needs:
   comments name the showcase sourcing), 1 fixed (isFinal edge case), 1 deferred (chart a11y
   aria-labels — see "Deferred Phase 6 polish" above).
 
+### Phase 7 decisions (leaderboards / profiles / firms / leagues / history / notifications)
+
+- **All UI reads through `getRepositories()`; zero authoritative math in components** (Rule 4).
+  Ranks/win-rates/percentiles/scores/ratings come pre-computed from `leaderboards.query`/
+  `getStanding`/`LeaderboardEntry.winRate`/`ParticipantSummary.ratingChange`/final metric
+  snapshots. The only arithmetic is presentational: `topPercent = 100 - globalPercentile`,
+  league band labels + division-progress % (from the provided `lib/data/leagues.ts`
+  `leagueForRating`), and display-only WIN/LOSS tallies. QA confirmed clean.
+- **Routes** (14 total). New/replaced: `/leaderboards` (URL-param filters `?league&market&firmSlug`,
+  "Your standing" strip, KevinV row highlight), `/profile` (demo user) + dynamic
+  `/profile/[userId]` (any seeded trader; `notFound()` on bad id), dynamic `/firms/[slug]`
+  (`notFound()` on bad slug), `/leagues` (Bronze→Elite ladder + promotion/demotion progress +
+  firms overview), `/history` (`BattleHistoryFilter` URL params incl. date range). Build:
+  `/leagues` + `/profile` prerender static; `/leaderboards`, `/history`, `/firms/[slug]`,
+  `/profile/[userId]`, and now `/battle/result` + `/battle/review` are **dynamic** (they read
+  `searchParams`/`params`).
+- **New components**: `components/profile/{profile.ts (server loader → ProfileViewModel, mirrors
+  showcase.ts), trader-profile-view.tsx (shared by both profile routes), rating-history-chart.tsx
+  (full-size client rating chart, sibling of the dashboard sparkline), achievement-grid.tsx
+  (lucide icon-name→component resolver, earned/locked states)}`,
+  `components/filters/query-filters.tsx` (reusable client filter bar; pushes URL query params —
+  the ONLY client-side filter mechanism, server components re-query on param change),
+  `components/layout/notifications-menu.tsx` (radix `Popover` bell + unread badge).
+  `format.ts` gained `FIRM_KIND_LABELS`, `formatWinRate`, exported `LEAGUE_LABELS`.
+- **Review-screen parameterization (done)**: `components/battle/showcase.ts` now exposes
+  `loadBattleView(battleId)` alongside `loadShowcaseBattle()`; both delegate to a private
+  `buildBattleView(detail, demoUserId)`. `loadBattleView` returns `null` if the battle is missing
+  or KevinV isn't a participant; `/battle/review` + `/battle/result` do
+  `(battle ? await loadBattleView(battle) : null) ?? await loadShowcaseBattle()` on a `?battle=`
+  param. The demo user always maps to the `demo` accent. **All sourcing via repositories — NO
+  server-side engine** (Turbopack prod-minifier gotcha holds).
+- **Telemetry degradation (important)**: only the showcase battle (battle-189) has intra-battle
+  telemetry (account snapshots, execution events, non-final metric snapshots). The other 189
+  battles have ONLY final metric snapshots. The view model gained a `hasTelemetry` flag; when
+  false the pnl/drawdown/score series + trade rows + timeline are empty and the review page
+  hides those blocks (each also guarded `.length > 0`), still rendering header + component
+  breakdown + why-won/lost + rating, plus an honest inline note ("Full intra-battle telemetry …
+  is captured for live-played battles in this demo…"). Match History "Review" links →
+  `/battle/review?battle=<id>`.
+- **Notifications data flow**: repositories are server-only, so the **root layout** (`app/layout.tsx`,
+  now `async`) fetches `notifications.listForUser` + `countUnread` for KevinV, maps to a plain
+  `HeaderNotification[]`, and passes it + `unreadCount` as props into the client `SiteHeader` →
+  `NotificationsMenu`. NO repo call inside any client component. Bell is accessible
+  (Esc/click-outside dismiss, `aria-label` with unread count, deep links via `href`).
+- **A11y**: new rating charts + dashboard sparkline gained `role="img"` + summarizing
+  `aria-label` (partially addresses the deferred Phase 6 chart-a11y item; `pair-line-chart.tsx`
+  + live-battle charts still pending — see backlog).
+- **Notifications/firms labeling**: firms carry "Demo firm — no real partnership implied";
+  skill-indicator cards (discipline/risk/performance) framed as competitive skill, NOT returns.
+  Fixed a Phase-6 carryover: dashboard Performance hint "Normalized returns" → "Normalized
+  execution" (matches the profile card) to keep clear of returns framing.
+- **QA verdict (`qa-reviewer`): PASS, no blocker/high.** 1 MEDIUM (the "Normalized returns"
+  framing) fixed pre-commit; 2 LOWs deferred (cosmetic — see backlog). Prohibited-term scan clean.
+
 ## Known state / gotchas
 
 - **Worked-example arithmetic**: the brief's component scores (78/91/88/80 vs 86/63/66/71) under strict
@@ -268,9 +332,17 @@ ONLY if a read model is genuinely missing. Everything the session needs:
   Workaround so far: don't run the engine server-side. If a later phase needs server-side engine
   replay (e.g. battle review SSR), fix first (next.config minify setting or Next upgrade).
 - Git repo initialized on `main`; no remote yet.
-- Verification gates green as of the Phase 6 commit: `npm run build` (14 routes; `/battle/result`
-  + `/battle/review` prerender static, `/battle` dynamic), `npm run lint`, `npm test` (139/139),
-  prod-server (`next start`) curls: `/`, `/battle/result`, `/battle/review`, `/matchmaking`,
-  `/battle`, `/battle?scenario=comeback-victory` all 200.
-- Working tree at handoff: clean after the Phase 6 commit (this doc + Phase 6 files committed
+- Verification gates green as of the Phase 7 commit: `npm run build` (14 routes — `/battle/result`
+  + `/battle/review` are now **dynamic** because they read `?battle=`; `/leaderboards`, `/history`,
+  `/firms/[slug]`, `/profile/[userId]` dynamic; `/leagues`, `/profile`, `/`, `/matchmaking`,
+  `/scoring`, `/integrations` static), `npm run lint`, `npm test` (139/139), prod-server
+  (`next start`) curls all 200 for: `/`, `/leaderboards` (+ `?league=GOLD`, multi-filter, and an
+  empty-result filter), `/profile`, `/profile/user-deltahunter`, `/firms/mffu`, `/firms/tradeify`,
+  `/leagues`, `/history` (+ `?result=WIN`, `?result=LOSS&market=NQ`),
+  `/battle/review?battle=battle-001` (no-telemetry graceful render),
+  `/battle/result?battle=battle-001`, `/battle/review`, `/battle/result`, `/matchmaking`,
+  `/battle`, `/scoring`; correct 404s for `/profile/user-doesnotexist`, `/firms/nope`.
+- Notifications dropdown uses the unified `radix-ui` package (`import { Popover } from "radix-ui"`,
+  already a dep `^1.6.2`) — no new dependency / no lockfile change.
+- Working tree at handoff: clean after the Phase 7 commit (this doc + Phase 7 files committed
   together).

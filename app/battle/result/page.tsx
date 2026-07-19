@@ -10,7 +10,7 @@ import Link from "next/link";
 import { ArrowRight, Home, Swords, Trophy } from "lucide-react";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
-import { loadShowcaseBattle } from "@/components/battle/showcase";
+import { loadBattleView, loadShowcaseBattle } from "@/components/battle/showcase";
 import { FinalScorecard } from "@/components/battle/final-scorecard";
 import { ComponentBreakdown } from "@/components/battle/component-breakdown";
 import { formatRatingDelta } from "@/components/battle/format";
@@ -21,8 +21,15 @@ export const metadata: Metadata = {
     "Head-to-head battle completion — final normalized scores, rating movement, and why the winner took it. Simulated demo data.",
 };
 
-export default async function BattleResultPage() {
-  const view = await loadShowcaseBattle();
+export default async function BattleResultPage({
+  searchParams,
+}: {
+  searchParams: Promise<{ battle?: string }>;
+}) {
+  const { battle } = await searchParams;
+  const view =
+    (battle ? await loadBattleView(battle) : null) ??
+    (await loadShowcaseBattle());
   if (!view) {
     return (
       <p className="py-16 text-center text-muted-foreground">
@@ -32,6 +39,7 @@ export default async function BattleResultPage() {
   }
 
   const { demo, opponent, narrative } = view;
+  const reviewHref = `/battle/review?battle=${view.battleId}`;
 
   return (
     <div className="mx-auto max-w-3xl space-y-6">
@@ -124,7 +132,7 @@ export default async function BattleResultPage() {
           </Link>
         </Button>
         <Button variant="outline" asChild>
-          <Link href="/battle/review">
+          <Link href={reviewHref}>
             Full review
             <ArrowRight data-icon="inline-end" aria-hidden />
           </Link>

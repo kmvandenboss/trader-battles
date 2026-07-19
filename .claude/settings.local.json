@@ -9,7 +9,21 @@
       "Bash(npx tsx *)",
       "Bash(npx vitest *)",
       "Bash(grep -iE \"error|warn|unhandled|exception|failed\" /tmp/dev3987.log | grep -viE \"onDemandEntries|compiled|ready|Local:|Network:\" | head -20; echo \"---exit scan done---\")",
-      "Read(//private/tmp/**)"
+      "Read(//private/tmp/**)",
+      "Bash(git commit *)",
+      "Bash(node -e \"const l=require\\('lucide-react'\\); for\\(const n of ['Trophy','Swords','Sword','Flame','Medal','Shield','AlarmClock','Activity','TrendingUp','CheckCircle','CircleCheck','Award','Bell','Filter','ChevronDown','Building2','Users','Star','Crown','Lock','ArrowUpRight','ArrowDownRight','Trophy']\\) console.log\\(n, typeof l[n]\\);\")",
+      "Bash(node -e \"const r=require\\('radix-ui'\\); console.log\\('Popover', typeof r.Popover, r.Popover && Object.keys\\(r.Popover\\)\\); console.log\\('DropdownMenu', typeof r.DropdownMenu\\);\")",
+      "Bash(curl -s -o /dev/null -w \"%{http_code}\" http://localhost:3123/)",
+      "Bash(break)",
+      "Bash(curl -s http://localhost:3123/history)",
+      "Bash(curl -s http://localhost:3123/leaderboards)",
+      "Bash(curl -s \"http://localhost:3123/leaderboards?league=ELITE&market=CL\")",
+      "Bash(curl -s \"http://localhost:3123/battle/review?battle=battle-001\")",
+      "Bash(curl -s \"http://localhost:3123/battle/review\")",
+      "Bash(curl -s http://localhost:3123/)",
+      "Bash(curl -s http://localhost:3123/profile)",
+      "Bash(curl -s http://localhost:3123/leagues)",
+      "Bash(curl -s http://localhost:3123/firms/mffu)"
     ]
   }
 }

@@ -10,9 +10,15 @@ import type {
   BattleType,
   BattleWindow,
   Division,
+  FirmKind,
   League,
   Market,
 } from "@/lib/data/schema";
+
+export const FIRM_KIND_LABELS: Record<FirmKind, string> = {
+  PROP_FIRM: "Prop firm",
+  AFFILIATION: "Affiliation",
+};
 
 export const BATTLE_WINDOW_LABELS: Record<BattleWindow, string> = {
   OPENING_BELL: "Opening Bell · 9:30–11:00 ET",
@@ -45,7 +51,7 @@ export const BATTLE_STYLE_LABELS: Record<BattleStyle, string> = {
   HIGH_FREQUENCY: "High Frequency",
 };
 
-const LEAGUE_LABELS: Record<League, string> = {
+export const LEAGUE_LABELS: Record<League, string> = {
   BRONZE: "Bronze",
   SILVER: "Silver",
   GOLD: "Gold",
@@ -142,6 +148,11 @@ export function formatDateTime(iso: string): string {
 /** "83.9" — one-decimal presentation of an already-computed score. */
 export function formatScore(value: number): string {
   return value.toFixed(1);
+}
+
+/** "62%" from an already-computed 0–1 win-rate fraction. */
+export function formatWinRate(rate: number): string {
+  return `${Math.round(rate * 100)}%`;
 }
 
 /** "Long 2" / "Short 1" / "Flat" from a signed open position. */

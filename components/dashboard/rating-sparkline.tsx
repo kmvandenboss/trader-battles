@@ -23,11 +23,17 @@ export interface SparklinePoint {
 
 interface RatingSparklineProps {
   data: SparklinePoint[];
+  /** Optional text alternative summarizing the trend for assistive tech. */
+  ariaLabel?: string;
 }
 
-export function RatingSparkline({ data }: RatingSparklineProps) {
+export function RatingSparkline({ data, ariaLabel }: RatingSparklineProps) {
   return (
-    <div className="h-16 w-full">
+    <div
+      className="h-16 w-full"
+      role={ariaLabel ? "img" : undefined}
+      aria-label={ariaLabel}
+    >
       <ResponsiveContainer width="100%" height="100%">
         <AreaChart data={data} margin={{ top: 4, right: 0, bottom: 0, left: 0 }}>
           <defs>

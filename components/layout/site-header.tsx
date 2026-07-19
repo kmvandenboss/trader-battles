@@ -12,13 +12,22 @@ import { usePathname } from "next/navigation";
 import { Swords } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { NAV_ITEMS } from "@/components/layout/nav-items";
+import {
+  NotificationsMenu,
+  type HeaderNotification,
+} from "@/components/layout/notifications-menu";
 
 function isActive(pathname: string, href: string): boolean {
   if (href === "/") return pathname === "/";
   return pathname === href || pathname.startsWith(`${href}/`);
 }
 
-export function SiteHeader() {
+interface SiteHeaderProps {
+  notifications: HeaderNotification[];
+  unreadCount: number;
+}
+
+export function SiteHeader({ notifications, unreadCount }: SiteHeaderProps) {
   const pathname = usePathname();
 
   return (
@@ -65,17 +74,26 @@ export function SiteHeader() {
           })}
         </nav>
 
-        <div className="hidden shrink-0 items-center gap-2.5 py-2 md:flex">
-          <div className="text-right leading-tight">
-            <p className="text-sm font-medium">KevinV</p>
-            <p className="text-xs text-muted-foreground">Gold II · 1,684</p>
-          </div>
-          <span
-            aria-hidden
-            className="flex size-8 items-center justify-center rounded-full border border-primary/40 bg-primary/15 text-xs font-semibold text-primary"
+        <div className="flex shrink-0 items-center gap-2.5 py-2">
+          <NotificationsMenu
+            notifications={notifications}
+            unreadCount={unreadCount}
+          />
+          <Link
+            href="/profile"
+            className="flex items-center gap-2.5 rounded-full transition-opacity hover:opacity-80"
           >
-            KV
-          </span>
+            <div className="hidden text-right leading-tight md:block">
+              <p className="text-sm font-medium">KevinV</p>
+              <p className="text-xs text-muted-foreground">Gold II · 1,684</p>
+            </div>
+            <span
+              aria-hidden
+              className="flex size-8 items-center justify-center rounded-full border border-primary/40 bg-primary/15 text-xs font-semibold text-primary"
+            >
+              KV
+            </span>
+          </Link>
         </div>
       </div>
     </header>

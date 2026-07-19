@@ -7,10 +7,10 @@
 
 import type { Metadata } from "next";
 import Link from "next/link";
-import { ArrowLeft, Home, Lightbulb, Swords } from "lucide-react";
+import { ArrowLeft, Home, Info, Lightbulb, Swords } from "lucide-react";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
-import { loadShowcaseBattle } from "@/components/battle/showcase";
+import { loadBattleView, loadShowcaseBattle } from "@/components/battle/showcase";
 import { ComponentBreakdown } from "@/components/battle/component-breakdown";
 import { TraderAvatar } from "@/components/battle/trader-avatar";
 import { LeagueBadge } from "@/components/battle/league-badge";
@@ -25,8 +25,15 @@ export const metadata: Metadata = {
     "Post-battle analysis — score components, P&L and drawdown over time, trade-by-trade, event timeline, and a competitive coaching read. Simulated demo data.",
 };
 
-export default async function BattleReviewPage() {
-  const view = await loadShowcaseBattle();
+export default async function BattleReviewPage({
+  searchParams,
+}: {
+  searchParams: Promise<{ battle?: string }>;
+}) {
+  const { battle } = await searchParams;
+  const view =
+    (battle ? await loadBattleView(battle) : null) ??
+    (await loadShowcaseBattle());
   if (!view) {
     return (
       <p className="py-16 text-center text-muted-foreground">
@@ -36,6 +43,7 @@ export default async function BattleReviewPage() {
   }
 
   const { demo, opponent, narrative } = view;
+  const resultHref = `/battle/result?battle=${view.battleId}`;
 
   return (
     <div className="mx-auto max-w-4xl space-y-6">
@@ -55,7 +63,7 @@ export default async function BattleReviewPage() {
             </p>
           </div>
           <Button variant="outline" size="sm" asChild>
-            <Link href="/battle/result">
+            <Link href={resultHref}>
               <ArrowLeft data-icon="inline-start" aria-hidden />
               Back to result
             </Link>
@@ -113,49 +121,75 @@ export default async function BattleReviewPage() {
         weightsNote="Weighted model — Performance 40% · Risk 25% · Discipline 20% · Consistency 15%. The total score rewards disciplined, risk-efficient trading over gross dollars."
       />
 
-      {/* Charts */}
-      <div className="grid gap-6 lg:grid-cols-2">
-        <PairLineChart
-          title="P&L over time"
-          subtitle="Realized P&L per account"
-          data={view.pnlSeries}
-          demoName={demo.displayName}
-          opponentName={opponent.displayName}
-          startTimestampMs={view.startTimestampMs}
-          durationMin={view.durationMin}
-          valueKind="pnl"
-        />
-        <PairLineChart
-          title="Drawdown over time"
-          subtitle="Peak-to-trough drop per account"
-          data={view.drawdownSeries}
-          demoName={demo.displayName}
-          opponentName={opponent.displayName}
-          startTimestampMs={view.startTimestampMs}
-          durationMin={view.durationMin}
-          valueKind="drawdown"
-        />
-      </div>
-      <PairLineChart
-        title="Battle score progression"
-        subtitle="Normalized 0–100 score at each checkpoint"
-        data={view.scoreSeries}
-        demoName={demo.displayName}
-        opponentName={opponent.displayName}
-        startTimestampMs={view.startTimestampMs}
-        durationMin={view.durationMin}
-        valueKind="score"
-      />
+      {/* Intra-battle telemetry — present only for live-played battles in the
+          demo. Absent it, we show an honest note and lean on the final board. */}
+      {view.hasTelemetry ? (
+        <>
+          {/* Charts */}
+          <div className="grid gap-6 lg:grid-cols-2">
+            {view.pnlSeries.length > 0 ? (
+              <PairLineChart
+                title="P&L over time"
+                subtitle="Realized P&L per account"
+                data={view.pnlSeries}
+                demoName={demo.displayName}
+                opponentName={opponent.displayName}
+                startTimestampMs={view.startTimestampMs}
+                durationMin={view.durationMin}
+                valueKind="pnl"
+              />
+            ) : null}
+            {view.drawdownSeries.length > 0 ? (
+              <PairLineChart
+                title="Drawdown over time"
+                subtitle="Peak-to-trough drop per account"
+                data={view.drawdownSeries}
+                demoName={demo.displayName}
+                opponentName={opponent.displayName}
+                startTimestampMs={view.startTimestampMs}
+                durationMin={view.durationMin}
+                valueKind="drawdown"
+              />
+            ) : null}
+          </div>
+          {view.scoreSeries.length > 0 ? (
+            <PairLineChart
+              title="Battle score progression"
+              subtitle="Normalized 0–100 score at each checkpoint"
+              data={view.scoreSeries}
+              demoName={demo.displayName}
+              opponentName={opponent.displayName}
+              startTimestampMs={view.startTimestampMs}
+              durationMin={view.durationMin}
+              valueKind="score"
+            />
+          ) : null}
 
-      {/* Trade table + timeline */}
-      <div className="grid gap-6 lg:grid-cols-2">
-        <TradeTable
-          rows={view.tradeRows}
-          demoName={demo.displayName}
-          opponentName={opponent.displayName}
-        />
-        <EventTimeline rows={view.timeline} />
-      </div>
+          {/* Trade table + timeline */}
+          <div className="grid gap-6 lg:grid-cols-2">
+            {view.tradeRows.length > 0 ? (
+              <TradeTable
+                rows={view.tradeRows}
+                demoName={demo.displayName}
+                opponentName={opponent.displayName}
+              />
+            ) : null}
+            {view.timeline.length > 0 ? (
+              <EventTimeline rows={view.timeline} />
+            ) : null}
+          </div>
+        </>
+      ) : (
+        <section className="flex items-start gap-3 rounded-xl border border-border bg-secondary/20 p-4">
+          <Info className="mt-0.5 size-4 shrink-0 text-muted-foreground" aria-hidden />
+          <p className="text-sm text-muted-foreground">
+            Full intra-battle telemetry — P&amp;L and drawdown curves,
+            trade-by-trade fills, and the event timeline — is captured for
+            live-played battles in this demo. For this battle we&apos;re showing
+            the final score breakdown, rating movement, and competitive read.
+          </p>
+        </section>
+      )}
 
       {/* Coaching summary */}
       <section className="rounded-xl border border-primary/30 bg-primary/5 p-5">
@@ -180,7 +214,7 @@ export default async function BattleReviewPage() {
           </Link>
         </Button>
         <Button variant="outline" asChild>
-          <Link href="/battle/result">
+          <Link href={resultHref}>
             <ArrowLeft data-icon="inline-start" aria-hidden />
             Back to result
           </Link>

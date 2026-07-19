@@ -100,6 +100,14 @@ export interface ShowcaseBattleView {
   headline: string;
   startTimestampMs: number;
   durationMin: number;
+  /**
+   * True only when the battle carries intra-battle telemetry (account
+   * snapshots + non-final metric snapshots + execution events). In this demo
+   * only the seeded showcase battle does; all other historical battles have
+   * final snapshots only, so the chart/trade/timeline arrays below are empty
+   * and the review screen degrades to the final breakdown.
+   */
+  hasTelemetry: boolean;
   demo: ParticipantView;
   opponent: ParticipantView;
   narrative: ReviewNarrative;
@@ -166,14 +174,48 @@ function buildPairSeries(
   return [...byMinute.values()].sort((x, y) => x.elapsedMin - y.elapsedMin);
 }
 
-/** Load and shape the seeded showcase battle for the result + review screens. */
+/**
+ * Load and shape the seeded showcase battle (the demo user's latest) for the
+ * standalone result + review screens.
+ */
 export async function loadShowcaseBattle(): Promise<ShowcaseBattleView | null> {
   const { traders, battles } = getRepositories();
   const demoTrader = await traders.getDemoTrader();
   const detail = await battles.getLatestForUser(demoTrader.user.id);
   if (!detail) return null;
+  return buildBattleView(detail, demoTrader.user.id);
+}
 
+/**
+ * Load and shape ANY historical battle the demo user took part in, for the
+ * parameterized review/result screens (Match History "Review"). Returns null
+ * if the battle is missing or the demo user is not a participant, so callers
+ * can fall back to the showcase battle.
+ *
+ * Only the seeded showcase battle carries intra-battle telemetry; for every
+ * other battle the chart/trade/timeline arrays come back empty (hasTelemetry
+ * false) and the review screen shows the final breakdown only.
+ */
+export async function loadBattleView(
+  battleId: string,
+): Promise<ShowcaseBattleView | null> {
+  const { traders, battles } = getRepositories();
+  const demoTrader = await traders.getDemoTrader();
+  const detail = await battles.getById(battleId);
+  if (!detail) return null;
   const demoUserId = demoTrader.user.id;
+  const isParticipant = detail.participants.some(
+    (p) => p.trader.user.id === demoUserId,
+  );
+  if (!isParticipant) return null;
+  return buildBattleView(detail, demoUserId);
+}
+
+/** Assemble the serializable view model from an already-loaded BattleDetail. */
+function buildBattleView(
+  detail: BattleDetail,
+  demoUserId: string,
+): ShowcaseBattleView {
   const demo = toParticipantView(detail, "demo", demoUserId);
   const opponent = toParticipantView(detail, "opponent", demoUserId);
 
@@ -197,6 +239,45 @@ export async function loadShowcaseBattle(): Promise<ShowcaseBattleView | null> {
     ? Date.parse(detail.battle.endTime)
     : startMs;
   const durationMin = Math.round((endMs - startMs) / 60_000);
+
+  const headline = demo.won
+    ? `${demo.displayName} defeats ${opponent.displayName}`
+    : `${opponent.displayName} defeats ${demo.displayName}`;
+
+  // Only the showcase battle carries intra-battle telemetry (account snapshots
+  // + non-final metric snapshots + execution events). Without it, the review
+  // screen degrades gracefully to the final breakdown, so we skip building the
+  // (empty) chart/trade/timeline arrays entirely.
+  const hasTelemetry =
+    detail.accountSnapshots.length > 0 ||
+    detail.executionEvents.length > 0 ||
+    detail.metricTimeline.some((m) => !m.isFinal);
+
+  const base = {
+    battleId: detail.battle.id,
+    market: detail.battle.market,
+    marketLabel: MARKET_LABELS[detail.battle.market],
+    windowLabel: BATTLE_WINDOW_LABELS[detail.battle.battleWindow],
+    dateLabel: formatDate(detail.battle.scheduledStart),
+    headline,
+    startTimestampMs: startMs,
+    durationMin,
+    demo,
+    opponent,
+    narrative,
+  };
+
+  if (!hasTelemetry) {
+    return {
+      ...base,
+      hasTelemetry: false,
+      pnlSeries: [],
+      drawdownSeries: [],
+      scoreSeries: [],
+      tradeRows: [],
+      timeline: [],
+    };
+  }
 
   // P&L over time (realized) and drawdown over time, per participant.
   const pnlSeries = buildPairSeries(
@@ -299,22 +380,9 @@ export async function loadShowcaseBattle(): Promise<ShowcaseBattleView | null> {
   }
   timeline.sort((x, y) => Date.parse(x.iso) - Date.parse(y.iso));
 
-  const headline = demo.won
-    ? `${demo.displayName} defeats ${opponent.displayName}`
-    : `${opponent.displayName} defeats ${demo.displayName}`;
-
   return {
-    battleId: detail.battle.id,
-    market: detail.battle.market,
-    marketLabel: MARKET_LABELS[detail.battle.market],
-    windowLabel: BATTLE_WINDOW_LABELS[detail.battle.battleWindow],
-    dateLabel: formatDate(detail.battle.scheduledStart),
-    headline,
-    startTimestampMs: startMs,
-    durationMin,
-    demo,
-    opponent,
-    narrative,
+    ...base,
+    hasTelemetry: true,
     pnlSeries,
     drawdownSeries,
     scoreSeries,
