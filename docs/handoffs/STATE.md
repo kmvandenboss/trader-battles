@@ -11,6 +11,33 @@
 - QA passes with the qa-reviewer agent after major phases and before "done".
 - User (Kevin) is hands-off; proceed autonomously, ask only when genuinely blocked.
 
+## ▶ NEXT ACTION (for the session picking this up)
+
+Launch **Phase 4 — Live Battle screen** with the `frontend-ui` agent. Everything it needs:
+
+- Consume the battle-engine stepping API exactly as documented under "Phase 3 decisions" below —
+  the UI recomputes NOTHING; it only formats engine output.
+- Install Recharts (not yet installed).
+- Build `/battle` (app/battle/*, components/battle/*): battle header (type, market, window
+  Opening Bell 9:30–11:00 ET, ticking time remaining, LIVE/PAUSED/FINAL badge, battle ID,
+  "±N rating" estimated movement — never the word "stakes", "Demo Verified — Simulated Data"
+  indicator); head-to-head scorecards (score animated, 4 component bars, P&L, drawdown, trades,
+  position, discipline status, risk meter, subtle LEADING tag); score-over-time comparison from
+  participants' history[]; Recharts NQ price chart from the battle script's pricePath with per-trader
+  entry/exit markers; live event feed via getFeedSince (penalties flagged, lead changes emphasized);
+  commentary strip; collapsible "Demo Controls" (scenario picker from SCENARIOS, start/pause/advance
+  event/speed 1x-2x-4x/reset/finish now); pre-battle ready state; battle-end overlay (winner, finals,
+  rating changes, finalResult.reasons) with "view full result" stubbed for Phase 6.
+- REQUIRED: a `BattleClock` client tick-loop abstraction (start/pause/resume/reset/advanceOneEvent/
+  setSpeed/finishNow/selectScenario) — the seam where SSE/real streams plug in later; UI consumes only
+  its outputs. A tiny read-only lib/battles helper to expose the script's price path is acceptable
+  (e.g. getBattleScriptForState); do not alter engine functions or scoring.
+- Rules: no gambling language, no profitability claims, tabular-nums to avoid jitter, use existing
+  --positive/--negative/--primary tokens, strong types, no `any`.
+- Verify: build + lint + test, then briefly `npm run dev` and curl /battle for runtime errors.
+- After the phase: commit, update this doc (mark Phase 4 done, record decisions), proceed to Phase 5
+  per KICKOFF.md. Run qa-reviewer after each phase per CLAUDE.md working style.
+
 ## Phase status
 
 | Phase | Status | Commit |
@@ -87,6 +114,11 @@
 - Price ticks are market data (`markPipelineToMarket`); executions go through `processExecutionEvent`
   (normalize → dedupe → ledger). `npm run battle -- <scenario-id>` runs any scenario headlessly.
 - Mock generator injects one intentional duplicate event per battle to exercise dedupe.
+- Post-QA fixes (`3ec124d`): engine decoupled via `lib/battles/battleScript.ts` (`BattleScriptSource`
+  interface + registry; mock is the default source, `createBattleState(scenarioId, source?)`); scenarios
+  now sessionDate 2026-07-18, OPENING_BELL 90-min window (seeded showcase battle stays 2026-07-17 MIDDAY
+  — deliberately distinct); scripts memoized per scenario id. 135 tests. Outcomes shifted slightly:
+  discipline 83.97/71.79, comeback 75.28/61.46, aggression unchanged.
 
 ## Known state / gotchas
 
@@ -98,5 +130,7 @@
 - Historical seed battle scores are authored demo data, internally consistent with 40/25/20/15 weights;
   plug-in points to regenerate via lib/scoring are commented in `buildDataset.ts` + `constants.ts`.
 - Git repo initialized on `main`; no remote yet.
-- Subagent IDs (SendMessage to continue): frontend-ui `ae1a75fb3298ec217`, data-seed `a48aa214eb1089c5f`
-  (same-session only — useless to a fresh session).
+- Verification gates green as of `3ec124d`: `npm run build`, `npm run lint`, `npm test` (135/135),
+  `npm run seed`, `npm run battle -- <each of the 3 scenario ids>`.
+- Recharts NOT installed yet (Phase 4 installs it).
+- Working tree at handoff: only this file modified since `3ec124d`.
