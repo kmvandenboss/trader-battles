@@ -8,6 +8,7 @@
     "start": "next start",
     "lint": "eslint",
     "seed": "tsx scripts/seed.ts",
+    "battle": "tsx scripts/run-battle.ts",
     "test": "vitest run"
   },
   "dependencies": {

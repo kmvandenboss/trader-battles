@@ -17,8 +17,8 @@
 |---|---|---|
 | 0 — Scaffold | ✅ done | `ebd92d8` |
 | 1 — Data model + seed | ✅ done | `11a8d98` |
-| 2 — Scoring + rating engines | ⏳ next | |
-| 3 — Mock provider / pipeline / battle engine | pending | |
+| 2 — Scoring + rating engines | ✅ done | `c9b9eb4` |
+| 3 — Mock provider / pipeline / battle engine | ⏳ next | |
 | 4 — Live Battle screen | pending | |
 | 5 — Matchmaking flow | pending | |
 | 6 — Dashboard, result, review | pending | |
@@ -48,6 +48,23 @@
   exactly +96, 1588→1684). Demo "today" = 2026-07-18. `getSeedDataset()` is cached.
 - KevinV's latest battle vs DeltaHunter mirrors the brief's worked example incl. execution trail.
 - `npm run seed` = validate + summarize dataset (exits non-zero on invariant violations).
+
+### Phase 2 decisions (scoring/ratings)
+
+- Public contract: `calculateBattleScore(input: BattleMetricsInput, config?: Partial<ScoringConfig>)`
+  from `@/lib/scoring/calculateBattleScore` (re-exports everything). All thresholds/penalties live in
+  `lib/scoring/config.ts` (`DEFAULT_SCORING_CONFIG`); weights auto-normalize (40/25/20/15 ≡ 0.4/…).
+- `BattleMetricsInput` = { netPnl, grossProfit, grossLoss, peakEquity, lowestEquity, maxDrawdown,
+  maxOpenContracts, trades[] (side/size/entry/exit/realizedPnl/entryTime/exitTime epoch-ms),
+  battleDurationMs, timeInSevereDrawdownMs, limits{permittedRisk, dailyLossLimit, maxContracts} }.
+  Severe drawdown suggestion: drawdown > 50% of permittedRisk (ledger decides).
+- Components each return { score, factors[] }; discipline also returns structured `violations[]`
+  (type/label/penalty/detail) → UI penalty events + "why you won" bullets.
+- Ratings: `calculateRatingChange({ playerRating, opponentRating, playerScore, opponentScore, result,
+  completionRatio?, playerViolationCount? })` → { change, newRating, breakdown }. Elo/400, K=32,
+  margin multiplier from SCORE margin (0.75–1.5), violation dampening on gains.
+- Worked example honest arithmetic = **83.55 / 74.0** (brief's 83.9/73.6 documented as approximations
+  in `lib/scoring/workedExample.ts`); seed's ±1.0 tolerance covers both.
 
 ## Known state / gotchas
 
