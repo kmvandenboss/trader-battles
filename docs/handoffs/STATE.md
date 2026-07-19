@@ -13,32 +13,39 @@
 
 ## ▶ NEXT ACTION (for the session picking this up)
 
-Launch **Phase 5 — Matchmaking flow** (KICKOFF.md Phase 5). Mostly `frontend-ui`; pull in
-`simulation-engine` ONLY if an additive engine-side helper is genuinely needed (the matchmaking
-engine already exists — see "Phase 3 decisions"). Everything the session needs:
+Launch **Phase 6 — Dashboard, result, and review** (KICKOFF.md Phase 6). Mostly `frontend-ui`;
+pull in `simulation-engine`/`scoring-engine` ONLY for additive engine-side helpers (candidates
+below). Everything the session needs:
 
-- Engine surface already built (`@/lib/battles/matchmaking`): `searchForOpponent`,
-  `createMatchmakingPlan` (staged status messages with timings), `DEMO_RATING_STAGES` (shortened
-  demo waits). KevinV → DeltaHunter with defaults. Battle config constants live in
-  `lib/battles/battleRules.ts` (MFFU 50K Rapid: $1,250 permitted risk / $1,250 DLL / 5 contracts).
-  UI must NOT invent opponents or rating math — it plays back the plan the engine returns.
-- Build the matchmaking screen (likely `/matchmaking` or under `/battle`; wire nav + the existing
-  "Find a Battle" entry points): battle configuration panel (market default NQ, battle window
-  default Opening Bell 9:30–11:00 ET, battle type default Live Performance, simulated MFFU 50K
-  Rapid account — all labeled demo); searching state animating through the plan's stages (widening
-  rating range + status messages, deterministic timing, skippable for demos); opponent reveal
-  moment (DeltaHunter card); head-to-head comparison (ratings, records, styles, component
-  strengths from seed data via repositories); then hand off into the live battle.
-- Handoff into battle: reuse the Phase 4 `LiveBattleScreen` / `useBattleClock` — e.g. route to
-  `/battle` with the chosen scenario, landing on the existing pre-battle ready state. Do not fork
-  a second battle UI. If a scenario param is added, validate with `isScenarioId`.
-- Rules: no gambling language ("matched", "opponent found" — never odds/stakes), no profitability
-  claims, simulated-data labels on account/config, tabular-nums, strong types, no `any`,
-  deterministic (no unseeded randomness; stage timing from the plan, not Math.random).
-- Verify: build + lint + test (135 green pre-phase), `npm run dev` + curl the new route AND
-  /battle. Run `qa-reviewer` after the phase (scope: the new diff; prior phases already QA'd).
-- After the phase: commit, update this doc (mark Phase 5 done, record decisions + QA notes),
-  proceed to Phase 6 per KICKOFF.md.
+- **Three deliverables** per KICKOFF.md: (1) Home dashboard at `/` (replaces the
+  `PagePlaceholder`): competitive overview (rating, league, season record, streak), "Find a
+  Battle" CTA → `/matchmaking`, recent battle card, performance insight cards, activity feed —
+  all from `getRepositories()` seed data (KevinV = demo user; see Phase 1 decisions for repo
+  surfaces incl. notifications/achievements). (2) Battle Completion result screen — winner,
+  final scores, rating change, "why you won / why you lost" (engine's
+  `finalResult.reasons[]`), actions (rematch → `/matchmaking`, review, home). (3) Battle Review
+  screen — score component breakdown, P&L + drawdown over time, trade-by-trade table, event
+  timeline, prewritten coaching summary.
+- **Result/review data sourcing decision to make early**: the live-battle end overlay already
+  shows `finalResult`; the standalone result/review screens can render (a) the seeded showcase
+  battle (KevinV vs DeltaHunter 2026-07-17, has authored execution trail — via repositories)
+  and/or (b) a headless engine replay of a scenario (`advanceBattleToEnd`). CAUTION for (b):
+  see the Turbopack prod-minifier gotcha below — run engine replay client-side (the Phase 4
+  precedent) or fix the bundler issue first; do NOT call `createBattleState` in a server
+  component without checking it.
+- Routes: suggest `/battle/result` + `/battle/review` (or `/history/[id]` for review of any
+  seeded battle — Phase 7 builds history, so keep it minimal). Wire the end-overlay's actions
+  to the new screens.
+- Nav cleanup opportunity (QA LOW): "Find a Battle" + "Battle" sit as sibling nav items; once
+  the dashboard CTA exists, consider renaming "Battle" → "Live Battle" or trimming nav.
+- Rules: same as always — no gambling language, no profitability claims (careful in coaching
+  copy: frame as competitive improvement, not money-making), UI computes NO scores/ratings
+  (coaching summaries must be authored/derived from engine outputs, not UI math), simulated
+  labels, strong types, no `any`, deterministic.
+- Verify: build + lint + test (135 green pre-phase), dev-server curl `/`, new routes, and
+  `/matchmaking` + `/battle` regressions. Run `qa-reviewer` after (scope: the new diff).
+- After the phase: commit, update this doc (mark Phase 6 done, decisions + QA notes), proceed
+  to Phase 7 per KICKOFF.md.
 
 ## Phase status
 
@@ -49,8 +56,8 @@ engine already exists — see "Phase 3 decisions"). Everything the session needs
 | 2 — Scoring + rating engines | ✅ done | `c9b9eb4` |
 | 3 — Mock provider / pipeline / battle engine | ✅ done | `015f225` |
 | 4 — Live Battle screen | ✅ done | `bcba1cb` |
-| 5 — Matchmaking flow | ⏳ next | |
-| 6 — Dashboard, result, review | pending | |
+| 5 — Matchmaking flow | ✅ done | `3216e43` |
+| 6 — Dashboard, result, review | ⏳ next | |
 | 7 — Leaderboards, profiles, leagues, history | pending | |
 | 8 — Docs + full QA | pending | |
 
@@ -155,6 +162,39 @@ engine already exists — see "Phase 3 decisions"). Everything the session needs
     must dismiss before Reset; `BattleClockOutput.progress` exposed but unused by the screen;
     engine flip-trade (long→short in one fill) would label SCALE_OUT/diamond — no scenario does this.
 
+### Phase 5 decisions (matchmaking flow)
+
+- `/matchmaking` = server page (`app/matchmaking/page.tsx`) + client flow
+  `components/matchmaking/matchmaking-flow.tsx` (state machine: config → searching → reveal →
+  head-to-head). Sub-components: config-panel, searching-panel, opponent-reveal, head-to-head,
+  types.ts (serializable `MatchmakingTraderCard`/`BattleConfig` view models). New shared atoms:
+  `components/battle/league-badge.tsx`; `format.ts` gained `BATTLE_STYLE_LABELS`, `formatLeague`,
+  `formatRecord`, `formatStreak`.
+- Server page sources all trader cards (demo user + full demo queue, incl. account plan labels)
+  through `getRepositories()`, and computes per-market matchability by probing the engine's
+  `searchForOpponent` past the widest stage — UI never invents matchmaking results. Scripted
+  opponent identity comes from `OPPONENT_PARTICIPANT` (mock provider constant, same source
+  `scenarios.ts` uses), NOT from constructing engine state server-side (see Turbopack gotcha).
+- Client flow builds the plan ONCE via `createMatchmakingPlan(request, undefined,
+  DEMO_RATING_STAGES)`; searching-panel is a pure playhead over `plan.ticks`/`matchedAtMs`
+  (±50→±100→±175 chips, cycling messages, "Reveal now" skip, Cancel). Reveal auto-advances 2.6s.
+- Market honesty: NQ/ES/MNQ selectable (engine-verified matches); MES/CL/GC disabled ("No
+  opponents queued"); non-Opening-Bell windows + non-Live-Performance types visible but disabled.
+  `battlePlayable` requires scripted opponent AND `market === "NQ"` (MNQ also resolves to
+  DeltaHunter but the scripts are NQ) — otherwise an honest "scripts follow the NQ rivalry" note
+  with New-search action.
+- Handoff: `/battle?scenario=<id>` validated server-side with `isScenarioId` (silent fallback to
+  default); `LiveBattleScreen` gained optional `initialScenarioId` prop → `useBattleClock(id)`;
+  page keys the screen by scenario for clean client-nav remounts. Head-to-head has a "Presenter
+  pick" scenario picker (3 scenarios, default = discipline). No forked battle UI.
+- Nav: added `{ label: "Find a Battle", href: "/matchmaking" }` after Home.
+- **QA verdict (`qa-reviewer`): pass, no blockers/highs.** MEDIUM (MNQ→NQ-script handoff
+  mismatch) + 2 LOWs (silent catch → inline `role="status"` error; account card "Connected
+  (Simulated)" chip + "Daily drawdown remaining" relabel) fixed pre-commit. Deferred LOWs:
+  - Nav has "Find a Battle" + "Battle" as siblings — revisit when Phase 6 dashboard CTA lands.
+  - `app/matchmaking/page.tsx` hardcodes `probeElapsedMs = 600_000` for the matchability probe —
+    engine-side `isMarketMatchable(request, queue)` helper would remove the timing assumption.
+
 ## Known state / gotchas
 
 - **Worked-example arithmetic**: the brief's component scores (78/91/88/80 vs 86/63/66/71) under strict
@@ -164,7 +204,15 @@ engine already exists — see "Phase 3 decisions"). Everything the session needs
   1712 are exact per spec.
 - Historical seed battle scores are authored demo data, internally consistent with 40/25/20/15 weights;
   plug-in points to regenerate via lib/scoring are commented in `buildDataset.ts` + `constants.ts`.
+- **Turbopack prod-minifier bug (found Phase 5)**: the production *server*-chunk minifier
+  mis-inlines `derivePipelineMetrics` (`lib/executions/processExecutionEvent.ts`) — the inlined
+  call drops the third argument, leaving a bare `battleDurationMs` reference → `ReferenceError`
+  if engine scoring runs in a production server context (e.g. `createBattleState` during
+  prerender). Client chunks minify correctly, so `/battle` (client-side clock) is unaffected.
+  Workaround so far: don't run the engine server-side. If a later phase needs server-side engine
+  replay (e.g. battle review SSR), fix first (next.config minify setting or Next upgrade).
 - Git repo initialized on `main`; no remote yet.
-- Verification gates green as of `bcba1cb`: `npm run build` (9 routes), `npm run lint`,
-  `npm test` (135/135), dev-server curl of `/battle` (200, READY state SSRs).
-- Working tree at handoff: only this file modified since `bcba1cb`.
+- Verification gates green as of `3216e43`: `npm run build` (12 routes), `npm run lint`,
+  `npm test` (135/135), dev-server curls: `/matchmaking`, `/battle`,
+  `/battle?scenario=comeback-victory`, `/battle?scenario=bogus` (falls back to default) all 200.
+- Working tree at handoff: only this file modified since `3216e43`.
