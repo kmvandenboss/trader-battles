@@ -5,7 +5,11 @@
       "Bash(git commit -q -m 'QA fixes: decouple battle engine from mock provider \\(BattleScriptSource\\), move scenarios to 2026-07-18 Opening Bell, memoize scripts *)",
       "Bash(npm run *)",
       "Bash(npm test *)",
-      "Bash(git commit -m ' *)"
+      "Bash(git commit -m ' *)",
+      "Bash(npx tsx *)",
+      "Bash(npx vitest *)",
+      "Bash(grep -iE \"error|warn|unhandled|exception|failed\" /tmp/dev3987.log | grep -viE \"onDemandEntries|compiled|ready|Local:|Network:\" | head -20; echo \"---exit scan done---\")",
+      "Read(//private/tmp/**)"
     ]
   }
 }

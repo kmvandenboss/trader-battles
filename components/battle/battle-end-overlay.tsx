@@ -7,6 +7,7 @@
  * lib/ratings, both computed inside the engine).
  */
 
+import Link from "next/link";
 import { Trophy, X } from "lucide-react";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
@@ -226,15 +227,15 @@ export function BattleEndOverlay({
 
         {/* Actions */}
         <div className="mt-5 flex flex-wrap items-center gap-2">
-          <Button disabled title="Full battle review arrives in Phase 6">
-            View full result
+          <Button asChild>
+            <Link href="/battle/result">View full result</Link>
           </Button>
-          <Button variant="outline" onClick={onClose}>
+          <Button variant="outline" asChild>
+            <Link href="/battle/review">Full review</Link>
+          </Button>
+          <Button variant="ghost" onClick={onClose}>
             Review final board
           </Button>
-          <span className="text-[11px] text-muted-foreground">
-            Full battle review screen arrives in Phase 6.
-          </span>
         </div>
       </div>
     </div>

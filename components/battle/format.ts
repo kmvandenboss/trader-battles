@@ -109,6 +109,41 @@ export function sessionTimeAt(
   return formatSessionTime(startTimestampMs + elapsedMs);
 }
 
+/** Session wall-clock in ET for an ISO timestamp string, e.g. "1:04". */
+export function sessionTimeFromIso(iso: string): string {
+  return formatSessionTime(Date.parse(iso));
+}
+
+const ET_DATE_FORMAT = new Intl.DateTimeFormat("en-US", {
+  timeZone: "America/New_York",
+  month: "short",
+  day: "numeric",
+  year: "numeric",
+});
+
+const ET_DATETIME_FORMAT = new Intl.DateTimeFormat("en-US", {
+  timeZone: "America/New_York",
+  month: "short",
+  day: "numeric",
+  hour: "numeric",
+  minute: "2-digit",
+});
+
+/** Calendar date in ET for an ISO timestamp, e.g. "Jul 17, 2026". */
+export function formatDate(iso: string): string {
+  return ET_DATE_FORMAT.format(new Date(Date.parse(iso)));
+}
+
+/** Short date + time in ET for an ISO timestamp, e.g. "Jul 17, 1:00 PM". */
+export function formatDateTime(iso: string): string {
+  return ET_DATETIME_FORMAT.format(new Date(Date.parse(iso)));
+}
+
+/** "83.9" — one-decimal presentation of an already-computed score. */
+export function formatScore(value: number): string {
+  return value.toFixed(1);
+}
+
 /** "Long 2" / "Short 1" / "Flat" from a signed open position. */
 export function formatPosition(position: number): string {
   if (position === 0) return "Flat";

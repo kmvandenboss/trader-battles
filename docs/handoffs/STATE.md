@@ -13,39 +13,54 @@
 
 ## ▶ NEXT ACTION (for the session picking this up)
 
-Launch **Phase 6 — Dashboard, result, and review** (KICKOFF.md Phase 6). Mostly `frontend-ui`;
-pull in `simulation-engine`/`scoring-engine` ONLY for additive engine-side helpers (candidates
-below). Everything the session needs:
+Launch **Phase 7 — Leaderboards, profiles, leagues, match history** (KICKOFF.md Phase 7).
+Mostly `frontend-ui`; the repository surfaces already exist (Phase 1) — pull in `data-seed`
+ONLY if a read model is genuinely missing. Everything the session needs:
 
-- **Three deliverables** per KICKOFF.md: (1) Home dashboard at `/` (replaces the
-  `PagePlaceholder`): competitive overview (rating, league, season record, streak), "Find a
-  Battle" CTA → `/matchmaking`, recent battle card, performance insight cards, activity feed —
-  all from `getRepositories()` seed data (KevinV = demo user; see Phase 1 decisions for repo
-  surfaces incl. notifications/achievements). (2) Battle Completion result screen — winner,
-  final scores, rating change, "why you won / why you lost" (engine's
-  `finalResult.reasons[]`), actions (rematch → `/matchmaking`, review, home). (3) Battle Review
-  screen — score component breakdown, P&L + drawdown over time, trade-by-trade table, event
-  timeline, prewritten coaching summary.
-- **Result/review data sourcing decision to make early**: the live-battle end overlay already
-  shows `finalResult`; the standalone result/review screens can render (a) the seeded showcase
-  battle (KevinV vs DeltaHunter 2026-07-17, has authored execution trail — via repositories)
-  and/or (b) a headless engine replay of a scenario (`advanceBattleToEnd`). CAUTION for (b):
-  see the Turbopack prod-minifier gotcha below — run engine replay client-side (the Phase 4
-  precedent) or fix the bundler issue first; do NOT call `createBattleState` in a server
-  component without checking it.
-- Routes: suggest `/battle/result` + `/battle/review` (or `/history/[id]` for review of any
-  seeded battle — Phase 7 builds history, so keep it minimal). Wire the end-overlay's actions
-  to the new screens.
-- Nav cleanup opportunity (QA LOW): "Find a Battle" + "Battle" sit as sibling nav items; once
-  the dashboard CTA exists, consider renaming "Battle" → "Live Battle" or trimming nav.
-- Rules: same as always — no gambling language, no profitability claims (careful in coaching
-  copy: frame as competitive improvement, not money-making), UI computes NO scores/ratings
-  (coaching summaries must be authored/derived from engine outputs, not UI math), simulated
-  labels, strong types, no `any`, deterministic.
-- Verify: build + lint + test (135 green pre-phase), dev-server curl `/`, new routes, and
-  `/matchmaking` + `/battle` regressions. Run `qa-reviewer` after (scope: the new diff).
-- After the phase: commit, update this doc (mark Phase 6 done, decisions + QA notes), proceed
-  to Phase 7 per KICKOFF.md.
+- **Deliverables** per KICKOFF.md, all from `getRepositories()` seed data (44 traders, 6 firms,
+  190 battles): (1) **Leaderboards** at `/leaderboards` (replaces PagePlaceholder) — filters +
+  columns per brief; use `leaderboards.query({ league?, market?, firmSlug?, limit, offset })`
+  → `{ entries: LeaderboardEntry[] (rank, trader, winRate), total }` and
+  `leaderboards.getStanding(userId)` for the demo user's row/percentiles. (2) **Trader profiles**
+  at `/profile` (demo user) — and ideally a dynamic `/profile/[userId]` (or `/traders/[id]`) for
+  any seeded trader: rating history chart (`traders.getRatingHistory` — 29 pts for KevinV),
+  season/lifetime record, badges (`achievements.listForUser` → 10 for KevinV; `listCatalog` for
+  the full set), primary/secondary markets, firm, style. Reuse `components/dashboard/rating-sparkline.tsx`
+  (generalize it). (3) **Firm profiles** (lightweight) at `/leagues` or a `/firms/[slug]` route —
+  `firms.list()` → `FirmStandings[]` (activeTraders, averageRating, weeklyWins/Losses, topTraders,
+  mostTradedMarkets); `firms.getFirmVsFirm(slug)`. (4) **League system** — Bronze→Elite w/
+  divisions + promotion/demotion progress; rating bands live in `lib/data/leagues.ts`
+  (150/league, 50/division). (5) **Match History** at `/history` (replaces PagePlaceholder) —
+  searchable/filterable via `battles.listForUser(userId, BattleHistoryFilter)` (result/market/
+  battleType/battleWindow/opponentUserId/from/to/limit). Each row links to `/battle/review`
+  (currently the review screen is hardcoded to the showcase battle — see LOW below to
+  parameterize it by battleId for real history review). (6) **Badges/achievements display** +
+  (7) **notifications dropdown** in the header (`notifications.listForUser`/`countUnread`; the
+  site-header currently has no notifications UI).
+- **Reuse what Phase 6 built**: `components/battle/showcase.ts` pattern (server loader →
+  serializable view model → client charts), `components/battle-review/pair-line-chart.tsx`
+  (two-series Recharts, `valueKind` prop), `components/battle/{league-badge,trader-avatar,
+  stat-pill,final-scorecard,component-breakdown}.tsx`, `format.ts` helpers.
+- **Parameterize the review screen (recommended early)**: `/battle/review` + `/battle/result`
+  currently always load `battles.getLatestForUser(demoUserId)` (the showcase battle-189). For
+  Match-History "review this battle" to work, generalize `loadShowcaseBattle()` to
+  `loadBattleView(battleId)` (falls back to showcase) and add `/history/[battleId]` or accept a
+  `?battle=` param. Keep sourcing via repositories (NO server-side engine — Turbopack gotcha).
+- Rules: same as always — no gambling language, no profitability claims, UI computes NO
+  scores/ratings (read via repositories / pure lib helpers only), Simulated Demo Data labels,
+  strong types, no `any`, deterministic. Firms stay clearly demo-labeled (no real partnership).
+- Verify: build + lint + test (139 green pre-phase), dev-server curl the new/replaced routes +
+  `/`, `/battle/result`, `/battle/review`, `/matchmaking`, `/battle` regressions. Run
+  `qa-reviewer` after (scope: the new diff).
+- After the phase: commit, update this doc (mark Phase 7 done, decisions + QA notes), proceed
+  to Phase 8 (docs + full QA) per KICKOFF.md.
+
+### Deferred Phase 6 polish (fold into Phase 7 or Phase 11)
+- **Chart a11y** (QA LOW): `rating-sparkline.tsx` + `battle-review/pair-line-chart.tsx` have no
+  text alternative — add an `aria-label` summarizing start→end. Consistent with the existing
+  live-battle charts (no regression), so batch with a later a11y pass.
+- Review/result screens are hardcoded to the showcase battle — parameterize by battleId when
+  Match History lands (see NEXT ACTION above).
 
 ## Phase status
 
@@ -57,8 +72,8 @@ below). Everything the session needs:
 | 3 — Mock provider / pipeline / battle engine | ✅ done | `015f225` |
 | 4 — Live Battle screen | ✅ done | `bcba1cb` |
 | 5 — Matchmaking flow | ✅ done | `3216e43` |
-| 6 — Dashboard, result, review | ⏳ next | |
-| 7 — Leaderboards, profiles, leagues, history | pending | |
+| 6 — Dashboard, result, review | ✅ done | _this commit_ |
+| 7 — Leaderboards, profiles, leagues, history | ⏳ next | |
 | 8 — Docs + full QA | pending | |
 
 ## Decisions made so far (beyond CLAUDE.md's locked ones)
@@ -195,6 +210,47 @@ below). Everything the session needs:
   - `app/matchmaking/page.tsx` hardcodes `probeElapsedMs = 600_000` for the matchability probe —
     engine-side `isMarketMatchable(request, queue)` helper would remove the timing assumption.
 
+### Phase 6 decisions (dashboard / result / review)
+
+- **Data sourcing (locked)**: standalone result + review screens render the **seeded showcase
+  battle** (KevinV WIN 83.9 vs DeltaHunter 73.6, +17 rating; battle-189, 2026-07-17) via
+  `getRepositories()` — NOT an engine replay. Sidesteps the Turbopack server-side-engine gotcha:
+  `/battle/result` + `/battle/review` prerender as `○ Static`. `components/battle/showcase.ts`
+  (`loadShowcaseBattle()`) is the single server-only loader → serializable `ShowcaseBattleView`
+  (participant views, narrative, pnl/drawdown/score `PairPoint[]` series, `TradeRow[]`,
+  `TimelineRow[]`). Both pages import it; client charts get plain numeric arrays only.
+- **Narrative derivation (new pure lib module)**: `lib/battles/reviewNarrative.ts` —
+  `deriveReviewNarrative(self, other)` → `{ reasons[], componentEdges[], coaching }` and
+  `buildComponentEdges(self, other)`. Pure projection over already-computed final
+  `BattleMetricSnapshot` values (compares/subtracts scores, never recomputes them) — mirrors the
+  engine's `buildReasons()` tone. Lives in lib/ (not UI) so components never do score-comparison
+  math (Rule 4). Coaching copy framed as competitive skill, no profitability/gambling language.
+  4 unit tests (`tests/reviewNarrative.test.ts`) against the seeded showcase. **Total tests: 139.**
+- **Home dashboard** (`app/page.tsx`, replaced PagePlaceholder): competitive overview
+  (rating/Gold II/18–11/3W + standing percentiles from `leaderboards.getStanding`), "Find a
+  Battle" CTA → `/matchmaking`, recent-battle card (showcase, links to result/review), performance
+  insight cards (discipline 84 / risk 79 / performance 76, explicitly disclaimed as skill
+  indicators not returns), activity feed (`components/dashboard/activity-feed.tsx` merges
+  `notifications.listForUser` + `battles.listRecent`), season rating sparkline
+  (`components/dashboard/rating-sparkline.tsx`, Recharts).
+- **New components**: `components/battle/{final-scorecard,component-breakdown}.tsx` (reusable,
+  mirror the end-overlay), `components/battle-review/{pair-line-chart,trade-table,event-timeline}.tsx`
+  (pair-line-chart = two-series Recharts driven by a `valueKind` prop for P&L/drawdown/score),
+  `components/dashboard/{activity-feed,rating-sparkline}.tsx`. `format.ts` gained pure formatters:
+  `sessionTimeFromIso`, `formatDate`, `formatDateTime`, `formatScore`.
+- **Wiring**: end-overlay (`battle-end-overlay.tsx`) actions now link "View full result" →
+  `/battle/result` and "Full review" → `/battle/review` (removed the Phase-6 placeholder);
+  "Review final board" still = onClose. Nav (`nav-items.ts`): "Battle" renamed → "Live Battle".
+  NOTE: the live `/battle` overlay reflects the live *scenario replay* (may differ from the seeded
+  showcase the standalone screens show) — acceptable for the demo, by design.
+- Chart series: metric-timeline points share timestamps across both traders (clean 5-pt score
+  chart); account snapshots don't, so P&L/drawdown series are minute-bucketed with `connectNulls`
+  (same idiom as the live score-timeline chart). `showcase.ts` marks the last fully-paired score
+  checkpoint as the "final bell" regardless of exact duration (post-QA robustness fix).
+- **QA verdict (`qa-reviewer`): PASS, no blocker/high/medium.** 3 LOWs; 1 already satisfied (doc
+  comments name the showcase sourcing), 1 fixed (isFinal edge case), 1 deferred (chart a11y
+  aria-labels — see "Deferred Phase 6 polish" above).
+
 ## Known state / gotchas
 
 - **Worked-example arithmetic**: the brief's component scores (78/91/88/80 vs 86/63/66/71) under strict
@@ -212,7 +268,9 @@ below). Everything the session needs:
   Workaround so far: don't run the engine server-side. If a later phase needs server-side engine
   replay (e.g. battle review SSR), fix first (next.config minify setting or Next upgrade).
 - Git repo initialized on `main`; no remote yet.
-- Verification gates green as of `3216e43`: `npm run build` (12 routes), `npm run lint`,
-  `npm test` (135/135), dev-server curls: `/matchmaking`, `/battle`,
-  `/battle?scenario=comeback-victory`, `/battle?scenario=bogus` (falls back to default) all 200.
-- Working tree at handoff: only this file modified since `3216e43`.
+- Verification gates green as of the Phase 6 commit: `npm run build` (14 routes; `/battle/result`
+  + `/battle/review` prerender static, `/battle` dynamic), `npm run lint`, `npm test` (139/139),
+  prod-server (`next start`) curls: `/`, `/battle/result`, `/battle/review`, `/matchmaking`,
+  `/battle`, `/battle?scenario=comeback-victory` all 200.
+- Working tree at handoff: clean after the Phase 6 commit (this doc + Phase 6 files committed
+  together).
