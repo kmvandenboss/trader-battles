@@ -13,46 +13,30 @@
 
 ## ▶ NEXT ACTION (for the session picking this up)
 
-Launch **Phase 8 — Docs, then a full QA pass** (KICKOFF.md Phase 8). This is the last build
-phase before polish. Two parts:
+**The app is feature-complete.** Phase 8 (docs + full QA) is done — full-app QA verdict: PASS,
+all 14 MVP acceptance criteria met, all 6 non-negotiable rules clean, all gates green. The last
+remaining phase is **Phase 11 — Polish**: work through the backlog below, highest-impact first,
+re-verify gates (`npm run build` / `npm run lint` / `npm test` 139/139), run a final qa-reviewer
+pass, commit. Suggested order: the two MEDIUMs (real `/scoring` + `/integrations` pages), then
+chart a11y, then the cosmetic LOWs.
 
-1. **Docs** (use the `docs-writer` agent). Write, describing what the code ACTUALLY does (not
-   aspirational) — read the codebase first:
-   - `README.md` — what Trader Battles is, the one-line pitch, "100% simulated demo data"
-     framing, quickstart (`npm i` → `npm run dev`; scripts: dev/build/lint/seed/test, plus
-     `npm run battle -- <scenario-id>`), route map (14 routes — see below), Vercel deploy
-     notes (no DB / no paid services), and the non-negotiable rules summary.
-   - `docs/architecture.md` — the one-directional data flow (mock provider → adapter →
-     normalized execution event → validate/dedupe → position ledger → battle metrics → score →
-     snapshot → UI). Document the module boundaries (`lib/integrations`, `lib/executions`,
-     `lib/battles`, `lib/scoring`, `lib/ratings`, `lib/data/repositories`), the repository
-     interface as the swap seam for real Postgres, and the `BattleClock`/`BattleScriptSource`
-     client-tick abstraction as the SSE/live-stream seam.
-   - `docs/scoring.md` — the 0–100 score, four components (Performance 40 / Risk 25 /
-     Discipline 20 / Consistency 15, configurable), penalties, the Elo-style rating change
-     (K=32, margin multiplier, violation dampening), and the worked example. **Honest-arithmetic
-     caveat**: strict 40/25/20/15 weights give **83.55 / 74.0**, not the brief's published
-     83.9/73.6 — document this (already handled in `lib/scoring/workedExample.ts`, ±1.0 seed
-     tolerance).
-   - `docs/integration-roadmap.md` — how NinjaTrader/Tradovate/Rithmic plug in behind
-     `TradingIntegrationProvider` (`lib/integrations/types.ts`) and the repository interface with
-     ZERO changes to scoring/battles/UI; the provider stubs under `lib/integrations/providers/*`.
-   - `docs/integrity-and-verification.md` — verification states (`SIMULATED` today →
-     `PROVIDER_VERIFIED` future), the "Simulated Demo Data" labeling policy, dedupe/audit trail
-     (`rawPayload`, one intentional duplicate per battle), determinism (seed `0x7b17c0de`).
-2. **Full QA** (use the `qa-reviewer` agent) — against the FULL MVP acceptance criteria in the
-   brief (not just a phase diff) + all non-negotiable rules. Produce a prioritized fix list.
-   Then fix any BLOCKER/HIGH, re-verify, commit.
-
-- Verify gates (must stay green): `npm run build` (14 routes), `npm run lint`, `npm test`
-  (139/139). Docs are prose-only — no code changes expected, so tests/build shouldn't move.
-- After the phase: commit, update this doc (mark Phase 8 done), then Phase 9
-  (leaderboards/profiles/leagues/history already shipped in Phase 7 — Phase 9 in KICKOFF is
-  folded in; the remaining KICKOFF items are Phase 10 docs polish already covered here and
-  **Phase 11 Polish**). Effectively after Phase 8 the app is feature-complete; remaining work is
-  the deferred-polish backlog below.
-
-### Deferred polish backlog (fold into Phase 11 Polish)
+### Polish backlog (Phase 11)
+- **MEDIUM — `/scoring` page is still a Phase-0 placeholder** (`app/scoring/page.tsx` renders
+  `PagePlaceholder`). Brief expects an in-app "How Scoring Works" page. Build it from
+  `docs/scoring.md` content (components/weights/penalties/worked example) with the frontend-ui
+  agent. README route table already honestly calls it a placeholder — update that row when built.
+- **MEDIUM — `/integrations` page is a bare placeholder** (`app/integrations/page.tsx`). Brief
+  wants the planned-provider matrix (status / connection method / data expected / verification
+  level). Render it from `docs/integration-roadmap.md` content. Keep "no partnership implied."
+- **Chart a11y**: `battle-review/pair-line-chart.tsx` still has no text alternative (the Phase 7
+  rating charts + dashboard sparkline now do — `role="img"` + summarizing `aria-label`). Add the
+  same to `pair-line-chart.tsx` and the live-battle charts for consistency.
+- **Phase 8 QA LOW**: `components/layout/site-header.tsx:87` hardcodes the "KevinV" identity
+  chip; the async root layout already calls repositories — pass the display name as a prop.
+- **Phase 7 QA LOWs** (cosmetic, not fixed): (a) `components/layout/notifications-menu.tsx:73`
+  `formatDateTime` omits the year → older seeded notifications show month/day only; (b)
+  `app/firms/[slug]/page.tsx:164` uses `MARKET_LABELS[m].split(" · ")[1]` to show the market
+  descriptor — relies on the " · " label shape; a dedicated market-name accessor would be safer.
 - **Chart a11y**: `battle-review/pair-line-chart.tsx` still has no text alternative (the Phase 7
   rating charts + dashboard sparkline now do — `role="img"` + summarizing `aria-label`). Add the
   same to `pair-line-chart.tsx` and the live-battle charts for consistency.
@@ -83,8 +67,9 @@ phase before polish. Two parts:
 | 4 — Live Battle screen | ✅ done | `bcba1cb` |
 | 5 — Matchmaking flow | ✅ done | `3216e43` |
 | 6 — Dashboard, result, review | ✅ done | `5554768` |
-| 7 — Leaderboards, profiles, leagues, history | ✅ done | _this commit_ |
-| 8 — Docs + full QA | ⏳ next | |
+| 7 — Leaderboards, profiles, leagues, history | ✅ done | `4cc0e3c` |
+| 8 — Docs + full QA | ✅ done | _this commit_ |
+| 11 — Polish (backlog above) | ⏳ next | |
 
 ## Decisions made so far (beyond CLAUDE.md's locked ones)
 
@@ -314,6 +299,29 @@ phase before polish. Two parts:
   execution" (matches the profile card) to keep clear of returns framing.
 - **QA verdict (`qa-reviewer`): PASS, no blocker/high.** 1 MEDIUM (the "Normalized returns"
   framing) fixed pre-commit; 2 LOWs deferred (cosmetic — see backlog). Prohibited-term scan clean.
+
+### Phase 8 decisions (docs + full QA)
+
+- **Docs written** (docs-writer agent), all describing actual code behavior: root `README.md`
+  (pitch, simulated-data framing, quickstart, scripts incl. `npm run battle -- <scenario-id>`,
+  full route table, Vercel notes, rules summary), `docs/architecture.md` (pipeline flow, module
+  boundaries, repository + BattleClock/BattleScriptSource swap seams, Turbopack note),
+  `docs/scoring.md` (components/weights/penalties tables verified against `lib/scoring/config.ts`,
+  rating math vs `lib/ratings/config.ts`, honest 83.55/74.0 caveat), `docs/integration-roadmap.md`
+  (provider stubs, zero-UI-change plug-in path, "nothing connected today", no partnership implied),
+  `docs/integrity-and-verification.md` (SIMULATED→PROVIDER_VERIFIED, labeling policy, dedupe/audit,
+  seed `0x7b17c0de`). `docs/README.md` replaced with a docs index. Route-count honesty: 13 app
+  routes; Next reports 14 incl. auto `_not-found`.
+- **Full-app QA (qa-reviewer): PASS — zero BLOCKER/HIGH.** All 14 MVP acceptance criteria met
+  with evidence; all 6 non-negotiable rules clean (word-boundary gambling-term scan, no
+  scoring/ratings imports in app/ or components/, no unseeded randomness anywhere). Gates green:
+  build (14 routes, static/dynamic split unchanged), lint, 139/139 tests, seed validator,
+  headless `npm run battle` (83.97 vs 71.79, expected winner confirmed), prod-server smoke —
+  17 routes 200, bad slugs 404.
+- 2 MEDIUMs found (placeholder `/scoring` + `/integrations` pages vs the brief's full text) →
+  deferred to the Phase 11 backlog above per QA's recommendation; README's `/scoring` row
+  reworded pre-commit to stop overstating the page. 1 new LOW (hardcoded header identity chip)
+  added to backlog.
 
 ## Known state / gotchas
 

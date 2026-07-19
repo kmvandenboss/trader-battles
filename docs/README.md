@@ -1,7 +1,14 @@
 # docs/
 
-Put your product brief here as **`PRODUCT_BRIEF.md`** before starting (see KICKOFF.md, setup step 5).
-`CLAUDE.md` and the subagents reference it by that path.
+Documentation for the Trader Battles demo. Start with the root [README](../README.md).
 
-Claude Code's docs-writer agent will later add: `architecture.md`, `scoring.md`, `integration-roadmap.md`,
-and `integrity-and-verification.md`.
+- [`PRODUCT_BRIEF.md`](PRODUCT_BRIEF.md) — the full product brief this build follows.
+- [`architecture.md`](architecture.md) — the one-directional data flow, module boundaries, and the
+  seams where real integrations, a real database, and a live event stream plug in later.
+- [`scoring.md`](scoring.md) — the 0–100 battle score, its four weighted components, discipline
+  penalties, the Elo-style rating change, and the worked example.
+- [`integration-roadmap.md`](integration-roadmap.md) — how real trading-platform providers plug in
+  behind the existing interfaces with zero changes to scoring, battles, or UI.
+- [`integrity-and-verification.md`](integrity-and-verification.md) — verification states, the
+  simulated-data labeling policy, dedupe/audit trail, and determinism guarantees.
+- [`handoffs/STATE.md`](handoffs/STATE.md) — build-state handoff doc for development sessions.
