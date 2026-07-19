@@ -7,6 +7,7 @@ export interface NavItem {
 
 export const NAV_ITEMS: NavItem[] = [
   { label: "Home", href: "/" },
+  { label: "Find a Battle", href: "/matchmaking" },
   { label: "Battle", href: "/battle" },
   { label: "Leaderboards", href: "/leaderboards" },
   { label: "Match History", href: "/history" },

@@ -5,7 +5,14 @@
  * computed by the battle/scoring engines. No scoring math lives in the UI.
  */
 
-import type { BattleType, BattleWindow, Market } from "@/lib/data/schema";
+import type {
+  BattleStyle,
+  BattleType,
+  BattleWindow,
+  Division,
+  League,
+  Market,
+} from "@/lib/data/schema";
 
 export const BATTLE_WINDOW_LABELS: Record<BattleWindow, string> = {
   OPENING_BELL: "Opening Bell · 9:30–11:00 ET",
@@ -28,6 +35,40 @@ export const MARKET_LABELS: Record<Market, string> = {
   CL: "CL · Crude Oil",
   GC: "GC · Gold",
 };
+
+export const BATTLE_STYLE_LABELS: Record<BattleStyle, string> = {
+  BALANCED: "Balanced",
+  AGGRESSIVE: "Aggressive",
+  DEFENSIVE: "Defensive",
+  MOMENTUM: "Momentum",
+  SELECTIVE: "Selective",
+  HIGH_FREQUENCY: "High Frequency",
+};
+
+const LEAGUE_LABELS: Record<League, string> = {
+  BRONZE: "Bronze",
+  SILVER: "Silver",
+  GOLD: "Gold",
+  PLATINUM: "Platinum",
+  DIAMOND: "Diamond",
+  ELITE: "Elite",
+};
+
+/** "Gold II" from seed-provided league + division. */
+export function formatLeague(league: League, division: Division): string {
+  return `${LEAGUE_LABELS[league]} ${division}`;
+}
+
+/** "18–11" from seed-provided season wins/losses. */
+export function formatRecord(wins: number, losses: number): string {
+  return `${wins}–${losses}`;
+}
+
+/** "3W" / "2L" / "—" from the seed's signed streak counter. */
+export function formatStreak(currentStreak: number): string {
+  if (currentStreak === 0) return "—";
+  return `${Math.abs(currentStreak)}${currentStreak > 0 ? "W" : "L"}`;
+}
 
 /** "$1,013" (always unsigned magnitude). */
 export function formatUsd(value: number): string {

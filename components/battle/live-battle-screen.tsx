@@ -15,6 +15,7 @@ import { Trophy } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import type { BattleFinalResult } from "@/lib/battles/battleEngine";
 import { getBattleScriptForState } from "@/lib/battles/getBattleScript";
+import { DEFAULT_SCENARIO_ID, type ScenarioId } from "@/lib/battles/scenarios";
 import { BattleEndOverlay } from "./battle-end-overlay";
 import { BattleHeader } from "./battle-header";
 import { CommentaryStrip } from "./commentary-strip";
@@ -26,8 +27,15 @@ import { ScoreTimelineChart } from "./score-timeline-chart";
 import { TraderScorecard } from "./scorecard";
 import { useBattleClock } from "./useBattleClock";
 
-export function LiveBattleScreen() {
-  const clock = useBattleClock();
+interface LiveBattleScreenProps {
+  /** Scenario preselected upstream (e.g. the matchmaking hand-off). */
+  initialScenarioId?: ScenarioId;
+}
+
+export function LiveBattleScreen({
+  initialScenarioId = DEFAULT_SCENARIO_ID,
+}: LiveBattleScreenProps) {
+  const clock = useBattleClock(initialScenarioId);
   const { state, status, feed, elapsedMs, remainingMs, controls } = clock;
 
   // Cheap on every render: scripts are memoized per scenario inside the
