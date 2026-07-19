@@ -18,8 +18,8 @@
 | 0 — Scaffold | ✅ done | `ebd92d8` |
 | 1 — Data model + seed | ✅ done | `11a8d98` |
 | 2 — Scoring + rating engines | ✅ done | `c9b9eb4` |
-| 3 — Mock provider / pipeline / battle engine | ⏳ next | |
-| 4 — Live Battle screen | pending | |
+| 3 — Mock provider / pipeline / battle engine | ✅ done | `015f225` |
+| 4 — Live Battle screen | ⏳ next | |
 | 5 — Matchmaking flow | pending | |
 | 6 — Dashboard, result, review | pending | |
 | 7 — Leaderboards, profiles, leagues, history | pending | |
@@ -65,6 +65,28 @@
   margin multiplier from SCORE margin (0.75–1.5), violation dampening on gains.
 - Worked example honest arithmetic = **83.55 / 74.0** (brief's 83.9/73.6 documented as approximations
   in `lib/scoring/workedExample.ts`); seed's ±1.0 tolerance covers both.
+
+### Phase 3 decisions (simulation/pipeline/battles)
+
+- Battle engine stepping API (`@/lib/battles/battleEngine`) — the UI tick loop calls:
+  `createBattleState(scenarioId)` → `advanceBattle(state, steps?)` / `advanceBattleToTime(state, elapsedMs)`
+  / `advanceBattleToEnd(state)` · `getBattleProgress(state)` · `getFeedSince(state, afterSequence)`.
+  Pure/immutable: every call returns a new JSON-serializable state. Pause = stop calling; reset = recreate.
+- Read surfaces: `state.participants[userId]` = { score: BattleScoreResult, metrics, netPnl, maxDrawdown,
+  riskUtilization, openPosition, tradeCount, history[] }; `state.feed: BattleFeedEvent[]` (BATTLE_START,
+  ENTRY, SCALE_IN/OUT, EXIT, LEAD_CHANGE, DRAWDOWN_ALERT, DISCIPLINE_PENALTY, TIME_REMAINING, COMMENTARY,
+  BATTLE_END); `state.finalResult: BattleFinalResult` (winner, component breakdowns, rating changes,
+  "why you won/lost" reasons[]).
+- Scenario registry `lib/battles/scenarios.ts`: `SCENARIOS`, `DEFAULT_SCENARIO_ID`
+  (= discipline-beats-raw-profit), `isScenarioId`. Outcomes: discipline 83.97 vs 71.96 (KevinV wins,
+  Delta out-earns $1,013 vs $704); comeback 75.39 vs 61.37 (3 lead changes); aggression 39.61 vs 80.85
+  (DeltaHunter wins; Kevin briefly +$1,487 up).
+- Matchmaking `lib/battles/matchmaking.ts`: `searchForOpponent`, `createMatchmakingPlan` (staged status
+  messages), `DEMO_RATING_STAGES` for shortened waits; KevinV→DeltaHunter with defaults.
+- Rules `lib/battles/battleRules.ts`: MFFU 50K Rapid = $1,250 permitted risk / $1,250 DLL / 5 contracts.
+- Price ticks are market data (`markPipelineToMarket`); executions go through `processExecutionEvent`
+  (normalize → dedupe → ledger). `npm run battle -- <scenario-id>` runs any scenario headlessly.
+- Mock generator injects one intentional duplicate event per battle to exercise dedupe.
 
 ## Known state / gotchas
 

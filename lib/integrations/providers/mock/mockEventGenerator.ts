@@ -19,11 +19,7 @@
  */
 
 import { mulberry32, randInt, type SeededRng } from "@/lib/data/seed/rng";
-import type {
-  BattleType,
-  BattleWindow,
-  Market,
-} from "@/lib/data/schema";
+import type { Market } from "@/lib/data/schema";
 import {
   BATTLE_WINDOW_DURATIONS_MS,
   BATTLE_WINDOW_START_UTC,
@@ -33,10 +29,17 @@ import {
   severeDrawdownThresholdFor,
   type AccountRuleSet,
 } from "@/lib/battles/battleRules";
-import type { BattleRiskLimits } from "@/lib/scoring/calculateBattleScore";
 import type { RawExecutionRecord } from "@/lib/integrations/types";
+import type {
+  BattlePricePoint,
+  BattleScript,
+  BattleScriptParticipant,
+  BattleScriptSource,
+  BattleScriptTimelineItem,
+} from "@/lib/battles/battleScript";
 import {
   getMockScenario,
+  isScenarioId,
   type MockScenarioDefinition,
   type ParticipantKey,
   type PlannedTrade,
@@ -44,50 +47,14 @@ import {
 } from "./scenarioDefinitions";
 
 // ---------------------------------------------------------------------------
-// Script shapes consumed by the battle engine
+// Script shapes — the provider-agnostic contract from lib/battles/battleScript
+// (aliased so existing mock-side call sites keep their names).
 // ---------------------------------------------------------------------------
 
-export interface ScriptParticipant {
-  key: ParticipantKey;
-  userId: string;
-  displayName: string;
-  firmName: string;
-  rating: number;
-  /** Provider-scoped account id (mock provider namespace). */
-  accountId: string;
-  accountLabel: string;
-  limits: BattleRiskLimits;
-  severeDrawdownThreshold: number;
-}
-
-export interface PricePoint {
-  minute: number;
-  timestampMs: number;
-  price: number;
-}
-
-export type ScriptTimelineItem =
-  | { kind: "PRICE"; timestampMs: number; price: number }
-  | {
-      kind: "EXECUTION";
-      timestampMs: number;
-      participantKey: ParticipantKey;
-      record: RawExecutionRecord;
-    };
-
-export interface MockBattleScript {
-  scenarioId: ScenarioId;
-  battleId: string;
-  market: Market;
-  battleType: BattleType;
-  battleWindow: BattleWindow;
-  startTimestampMs: number;
-  durationMs: number;
-  participants: readonly [ScriptParticipant, ScriptParticipant];
-  pricePath: PricePoint[];
-  timeline: ScriptTimelineItem[];
-  expectedWinnerUserId: string;
-}
+export type ScriptParticipant = BattleScriptParticipant;
+export type PricePoint = BattlePricePoint;
+export type ScriptTimelineItem = BattleScriptTimelineItem;
+export type MockBattleScript = BattleScript;
 
 // ---------------------------------------------------------------------------
 // Demo participants (specs locked by CLAUDE.md; accounts match the seed)
@@ -307,10 +274,20 @@ function buildTradeEvents(
 // ---------------------------------------------------------------------------
 
 /**
+ * Memoized scripts: the Phase 4 tick loop resolves the script roughly every
+ * second, and generation is fully deterministic per scenario id, so building
+ * each scenario once per process is safe. Scripts are treated as immutable
+ * by every consumer (the engine clones only its own state).
+ */
+const scriptCache = new Map<ScenarioId, MockBattleScript>();
+
+/**
  * Generate the full deterministic battle script for a scenario. Same
  * scenario id -> byte-identical script, every time.
  */
 export function generateBattleScript(scenarioId: ScenarioId): MockBattleScript {
+  const cached = scriptCache.get(scenarioId);
+  if (cached) return cached;
   const scenario = getMockScenario(scenarioId);
   const rng = mulberry32(scenario.seed);
 
@@ -385,7 +362,7 @@ export function generateBattleScript(scenarioId: ScenarioId): MockBattleScript {
     return 0;
   });
 
-  return {
+  const script: MockBattleScript = {
     scenarioId,
     battleId: `battle-live-${scenarioId}`,
     market: scenario.market,
@@ -398,4 +375,21 @@ export function generateBattleScript(scenarioId: ScenarioId): MockBattleScript {
     timeline,
     expectedWinnerUserId: byKey[scenario.expectedWinner].userId,
   };
+  scriptCache.set(scenarioId, script);
+  return script;
 }
+
+/**
+ * The demo's `BattleScriptSource` — what the battle engine points at by
+ * default. A real integration registers its own source built on a live
+ * quote + execution transport instead (see lib/battles/battleScript.ts).
+ */
+export const MOCK_BATTLE_SCRIPT_SOURCE: BattleScriptSource = {
+  id: "mock",
+  getScript(scriptId: string): MockBattleScript {
+    if (!isScenarioId(scriptId)) {
+      throw new Error(`mock script source: unknown scenario "${scriptId}"`);
+    }
+    return generateBattleScript(scriptId);
+  },
+};

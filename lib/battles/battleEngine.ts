@@ -9,7 +9,7 @@
  * scores itself, and neither may the UI.
  *
  * Stepping API (Phase 4's BattleClock/tick loop drives this):
- *   createBattleState(scenarioId)          -> initial serializable state
+ *   createBattleState(scenarioId, source?) -> initial serializable state
  *   advanceBattle(state, steps)            -> consume next N timeline items
  *   advanceBattleToTime(state, elapsedMs)  -> catch up to a battle clock time
  *   advanceBattleToEnd(state)              -> "finish battle immediately"
@@ -17,8 +17,10 @@
  *
  * Every function returns a NEW state; states are plain JSON-serializable
  * snapshots, so pause/resume/reset and future SSE transport need no engine
- * changes. Demo wiring reads the script from the mock provider; a live
- * transport would feed the same items from a real provider instead.
+ * changes. The timeline comes from an injected `BattleScriptSource`
+ * (lib/battles/battleScript.ts) — the mock provider's source is only the
+ * demo DEFAULT; a live deployment registers a source built on a real
+ * provider's streams and nothing in this file changes.
  */
 
 import {
@@ -49,8 +51,24 @@ import {
   DRAWDOWN_ALERT_FRACTIONS,
   TIME_REMAINING_MARKERS_MINUTES,
 } from "./battleRules";
-import { generateBattleScript } from "@/lib/integrations/providers/mock/mockEventGenerator";
-import type { ScenarioId } from "@/lib/integrations/providers/mock/scenarioDefinitions";
+import {
+  getBattleScriptSource,
+  registerBattleScriptSource,
+  type BattleScript,
+  type BattleScriptSource,
+} from "./battleScript";
+// Demo default only — injected like matchmaking's default queue. The engine
+// itself is provider-agnostic; any registered BattleScriptSource works.
+import { MOCK_BATTLE_SCRIPT_SOURCE } from "@/lib/integrations/providers/mock/mockEventGenerator";
+
+registerBattleScriptSource(MOCK_BATTLE_SCRIPT_SOURCE);
+
+/** Resolve the (deterministic) script a battle state was created from. */
+function scriptFor(state: BattleEngineState): BattleScript {
+  return getBattleScriptSource(state.scriptSourceId).getScript(
+    state.scenarioId,
+  );
+}
 
 // ---------------------------------------------------------------------------
 // Public shapes
@@ -133,7 +151,8 @@ export interface BattleParticipantResult {
 
 export interface BattleFinalResult {
   battleId: string;
-  scenarioId: ScenarioId;
+  /** Script id within its source (demo: one of the three scenario ids). */
+  scenarioId: string;
   /** null on a draw. */
   winnerUserId: string | null;
   headline: string;
@@ -142,7 +161,10 @@ export interface BattleFinalResult {
 }
 
 export interface BattleEngineState {
-  scenarioId: ScenarioId;
+  /** Script id within its source (demo: one of the three scenario ids). */
+  scenarioId: string;
+  /** Which registered BattleScriptSource supplies the timeline ("mock"). */
+  scriptSourceId: string;
   battleId: string;
   market: Market;
   battleType: BattleType;
@@ -211,8 +233,12 @@ function computeScore(
   return { metrics, score: calculateBattleScore(metrics) };
 }
 
-export function createBattleState(scenarioId: ScenarioId): BattleEngineState {
-  const script = generateBattleScript(scenarioId);
+export function createBattleState(
+  scenarioId: string,
+  source: BattleScriptSource = MOCK_BATTLE_SCRIPT_SOURCE,
+): BattleEngineState {
+  registerBattleScriptSource(source);
+  const script = source.getScript(scenarioId);
   const participants: Record<string, BattleParticipantState> = {};
   for (const scripted of script.participants) {
     const pipeline = createPipelineState(script.market, {
@@ -245,6 +271,7 @@ export function createBattleState(scenarioId: ScenarioId): BattleEngineState {
   const [demo, opponent] = script.participants;
   const state: BattleEngineState = {
     scenarioId,
+    scriptSourceId: source.id,
     battleId: script.battleId,
     market: script.market,
     battleType: script.battleType,
@@ -780,7 +807,7 @@ export function advanceBattle(
   steps = 1,
 ): BattleEngineState {
   if (state.status === "COMPLETED" || steps <= 0) return state;
-  const script = generateBattleScript(state.scenarioId);
+  const script = scriptFor(state);
   const next = cloneState(state);
   let consumed = 0;
   while (consumed < steps && next.cursor < script.timeline.length) {
@@ -815,7 +842,7 @@ export function advanceBattleToTime(
   elapsedMs: number,
 ): BattleEngineState {
   if (state.status === "COMPLETED") return state;
-  const script = generateBattleScript(state.scenarioId);
+  const script = scriptFor(state);
   const targetTimestampMs =
     state.startTimestampMs + Math.min(elapsedMs, state.durationMs);
   let steps = 0;
@@ -848,7 +875,7 @@ export interface BattleProgress {
 }
 
 export function getBattleProgress(state: BattleEngineState): BattleProgress {
-  const script = generateBattleScript(state.scenarioId);
+  const script = scriptFor(state);
   return {
     elapsedMs: state.clockMs,
     durationMs: state.durationMs,

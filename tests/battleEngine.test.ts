@@ -16,7 +16,11 @@ import {
   type BattleEngineState,
 } from "@/lib/battles/battleEngine";
 import { SCENARIOS, type ScenarioId } from "@/lib/battles/scenarios";
-import { generateBattleScript } from "@/lib/integrations/providers/mock/mockEventGenerator";
+import type { BattleScriptSource } from "@/lib/battles/battleScript";
+import {
+  MOCK_BATTLE_SCRIPT_SOURCE,
+  generateBattleScript,
+} from "@/lib/integrations/providers/mock/mockEventGenerator";
 import { WORKED_EXAMPLE } from "@/lib/scoring/workedExample";
 
 function runToEnd(scenarioId: ScenarioId, chunk = 40): BattleEngineState {
@@ -88,7 +92,7 @@ describe("battle engine determinism", () => {
     expect(state.clockMs).toBe(30 * 60_000);
     expect(state.status).toBe("LIVE");
     const progress = getBattleProgress(state);
-    expect(progress.fractionComplete).toBeCloseTo(0.25, 5);
+    expect(progress.fractionComplete).toBeCloseTo(30 / 90, 5); // OPENING_BELL = 90 min
     const resumed = advanceBattleToEnd(state);
     const straight = advanceBattleToEnd(
       createBattleState("discipline-beats-raw-profit"),
@@ -106,6 +110,27 @@ describe("battle engine determinism", () => {
     const fromOriginal = advanceBattleToEnd(state);
     expect(JSON.stringify(fromRevived.finalResult)).toBe(
       JSON.stringify(fromOriginal.finalResult),
+    );
+  });
+
+  it("accepts an injected BattleScriptSource (engine is provider-agnostic)", () => {
+    // A stand-in for a future real-provider source: same script contract,
+    // different registered id. The engine must behave identically.
+    const customSource: BattleScriptSource = {
+      id: "test-live-provider",
+      getScript: (scriptId) => MOCK_BATTLE_SCRIPT_SOURCE.getScript(scriptId),
+    };
+    let injected = createBattleState(
+      "discipline-beats-raw-profit",
+      customSource,
+    );
+    expect(injected.scriptSourceId).toBe("test-live-provider");
+    injected = advanceBattleToEnd(injected);
+    const viaDefault = advanceBattleToEnd(
+      createBattleState("discipline-beats-raw-profit"),
+    );
+    expect(JSON.stringify(injected.finalResult)).toBe(
+      JSON.stringify(viaDefault.finalResult),
     );
   });
 
