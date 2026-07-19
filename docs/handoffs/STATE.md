@@ -16,8 +16,8 @@
 | Phase | Status | Commit |
 |---|---|---|
 | 0 — Scaffold | ✅ done | `ebd92d8` |
-| 1 — Data model + seed | ⏳ next | |
-| 2 — Scoring + rating engines | pending | |
+| 1 — Data model + seed | ✅ done | `11a8d98` |
+| 2 — Scoring + rating engines | ⏳ next | |
 | 3 — Mock provider / pipeline / battle engine | pending | |
 | 4 — Live Battle screen | pending | |
 | 5 — Matchmaking flow | pending | |
@@ -34,8 +34,30 @@
 - Global demo notice lives in `components/layout/demo-notice.tsx`, rendered once in root layout.
 - npm scripts all wired: dev/build/lint/seed (placeholder)/test.
 
+### Phase 1 decisions (data layer)
+
+- Schema: drizzle-orm pg-core (v0.45.2), NO db driver — demo runs fully in-memory. 14 tables in
+  `lib/data/schema/tables.ts`; enums as const-tuple unions in `schema/enums.ts`; app imports
+  `$inferSelect` domain types from `schema/types.ts`, never ORM objects. Timestamps `mode: "string"`.
+- `lib/data/leagues.ts`: rating bands 150/league, 50/division, anchored so 1684→Gold II, 1712→Gold I.
+- Repositories: `lib/data/repositories/types.ts` defines Trader/Battle/Leaderboard/Firm/Achievement/
+  Notification repos under one `Repositories` interface; `getRepositories()` singleton in `index.ts`;
+  in-memory impl derives standings/leaderboards/percentiles from traders+battles (no drift).
+- Seed: `lib/data/seed/` — master seed `0x7b17c0de` fans into 5 mulberry32 streams. 44 traders,
+  6 firms, 190 battles, 380 participants, rating chains land on authored targets (KevinV pinned to
+  exactly +96, 1588→1684). Demo "today" = 2026-07-18. `getSeedDataset()` is cached.
+- KevinV's latest battle vs DeltaHunter mirrors the brief's worked example incl. execution trail.
+- `npm run seed` = validate + summarize dataset (exits non-zero on invariant violations).
+
 ## Known state / gotchas
 
-- `lib/` contains only README stubs + `lib/integrations/types.ts` placeholder — no real code yet.
-- `scripts/seed.ts` is a placeholder; Phase 1 replaces it.
+- **Worked-example arithmetic**: the brief's component scores (78/91/88/80 vs 86/63/66/71) under strict
+  40/25/20/15 weights give **83.55 / 74.0**, not the brief's published 83.9/73.6. Seed validator allows
+  ±1.0 tolerance on the showcase battle. Scoring engine (Phase 2) must document/handle this.
+- DeltaHunter's derived current streak is a LOSS streak (he just lost the showcase battle); his 21–13 /
+  1712 are exact per spec.
+- Historical seed battle scores are authored demo data, internally consistent with 40/25/20/15 weights;
+  plug-in points to regenerate via lib/scoring are commented in `buildDataset.ts` + `constants.ts`.
 - Git repo initialized on `main`; no remote yet.
+- Subagent IDs (SendMessage to continue): frontend-ui `ae1a75fb3298ec217`, data-seed `a48aa214eb1089c5f`
+  (same-session only — useless to a fresh session).
