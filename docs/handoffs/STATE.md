@@ -13,30 +13,32 @@
 
 ## ▶ NEXT ACTION (for the session picking this up)
 
-Launch **Phase 4 — Live Battle screen** with the `frontend-ui` agent. Everything it needs:
+Launch **Phase 5 — Matchmaking flow** (KICKOFF.md Phase 5). Mostly `frontend-ui`; pull in
+`simulation-engine` ONLY if an additive engine-side helper is genuinely needed (the matchmaking
+engine already exists — see "Phase 3 decisions"). Everything the session needs:
 
-- Consume the battle-engine stepping API exactly as documented under "Phase 3 decisions" below —
-  the UI recomputes NOTHING; it only formats engine output.
-- Install Recharts (not yet installed).
-- Build `/battle` (app/battle/*, components/battle/*): battle header (type, market, window
-  Opening Bell 9:30–11:00 ET, ticking time remaining, LIVE/PAUSED/FINAL badge, battle ID,
-  "±N rating" estimated movement — never the word "stakes", "Demo Verified — Simulated Data"
-  indicator); head-to-head scorecards (score animated, 4 component bars, P&L, drawdown, trades,
-  position, discipline status, risk meter, subtle LEADING tag); score-over-time comparison from
-  participants' history[]; Recharts NQ price chart from the battle script's pricePath with per-trader
-  entry/exit markers; live event feed via getFeedSince (penalties flagged, lead changes emphasized);
-  commentary strip; collapsible "Demo Controls" (scenario picker from SCENARIOS, start/pause/advance
-  event/speed 1x-2x-4x/reset/finish now); pre-battle ready state; battle-end overlay (winner, finals,
-  rating changes, finalResult.reasons) with "view full result" stubbed for Phase 6.
-- REQUIRED: a `BattleClock` client tick-loop abstraction (start/pause/resume/reset/advanceOneEvent/
-  setSpeed/finishNow/selectScenario) — the seam where SSE/real streams plug in later; UI consumes only
-  its outputs. A tiny read-only lib/battles helper to expose the script's price path is acceptable
-  (e.g. getBattleScriptForState); do not alter engine functions or scoring.
-- Rules: no gambling language, no profitability claims, tabular-nums to avoid jitter, use existing
-  --positive/--negative/--primary tokens, strong types, no `any`.
-- Verify: build + lint + test, then briefly `npm run dev` and curl /battle for runtime errors.
-- After the phase: commit, update this doc (mark Phase 4 done, record decisions), proceed to Phase 5
-  per KICKOFF.md. Run qa-reviewer after each phase per CLAUDE.md working style.
+- Engine surface already built (`@/lib/battles/matchmaking`): `searchForOpponent`,
+  `createMatchmakingPlan` (staged status messages with timings), `DEMO_RATING_STAGES` (shortened
+  demo waits). KevinV → DeltaHunter with defaults. Battle config constants live in
+  `lib/battles/battleRules.ts` (MFFU 50K Rapid: $1,250 permitted risk / $1,250 DLL / 5 contracts).
+  UI must NOT invent opponents or rating math — it plays back the plan the engine returns.
+- Build the matchmaking screen (likely `/matchmaking` or under `/battle`; wire nav + the existing
+  "Find a Battle" entry points): battle configuration panel (market default NQ, battle window
+  default Opening Bell 9:30–11:00 ET, battle type default Live Performance, simulated MFFU 50K
+  Rapid account — all labeled demo); searching state animating through the plan's stages (widening
+  rating range + status messages, deterministic timing, skippable for demos); opponent reveal
+  moment (DeltaHunter card); head-to-head comparison (ratings, records, styles, component
+  strengths from seed data via repositories); then hand off into the live battle.
+- Handoff into battle: reuse the Phase 4 `LiveBattleScreen` / `useBattleClock` — e.g. route to
+  `/battle` with the chosen scenario, landing on the existing pre-battle ready state. Do not fork
+  a second battle UI. If a scenario param is added, validate with `isScenarioId`.
+- Rules: no gambling language ("matched", "opponent found" — never odds/stakes), no profitability
+  claims, simulated-data labels on account/config, tabular-nums, strong types, no `any`,
+  deterministic (no unseeded randomness; stage timing from the plan, not Math.random).
+- Verify: build + lint + test (135 green pre-phase), `npm run dev` + curl the new route AND
+  /battle. Run `qa-reviewer` after the phase (scope: the new diff; prior phases already QA'd).
+- After the phase: commit, update this doc (mark Phase 5 done, record decisions + QA notes),
+  proceed to Phase 6 per KICKOFF.md.
 
 ## Phase status
 
@@ -46,8 +48,8 @@ Launch **Phase 4 — Live Battle screen** with the `frontend-ui` agent. Everythi
 | 1 — Data model + seed | ✅ done | `11a8d98` |
 | 2 — Scoring + rating engines | ✅ done | `c9b9eb4` |
 | 3 — Mock provider / pipeline / battle engine | ✅ done | `015f225` |
-| 4 — Live Battle screen | ⏳ next | |
-| 5 — Matchmaking flow | pending | |
+| 4 — Live Battle screen | ✅ done | `bcba1cb` |
+| 5 — Matchmaking flow | ⏳ next | |
 | 6 — Dashboard, result, review | pending | |
 | 7 — Leaderboards, profiles, leagues, history | pending | |
 | 8 — Docs + full QA | pending | |
@@ -120,6 +122,39 @@ Launch **Phase 4 — Live Battle screen** with the `frontend-ui` agent. Everythi
   — deliberately distinct); scripts memoized per scenario id. 135 tests. Outcomes shifted slightly:
   discipline 83.97/71.79, comeback 75.28/61.46, aggression unchanged.
 
+### Phase 4 decisions (Live Battle screen)
+
+- `/battle` = `components/battle/live-battle-screen.tsx` (the only component talking to the clock);
+  sub-components: battle-header, scorecard, score-timeline-chart, price-chart, event-feed/event-row,
+  commentary-strip, demo-controls, pre-battle, battle-end-overlay; atoms: trader-avatar (+ shared
+  `TRADER_COLORS`), stat-pill, animated-number, format.ts (pure display formatting only).
+- **BattleClock** = `components/battle/useBattleClock.ts` — React hook owning the engine snapshot;
+  the documented SSE/live-transport seam (header lines 3–21). 200ms interval advances a presentation
+  playhead at 30× compression (90-min battle ≈ 3 min at 1x; speeds 1x/2x/4x) and calls
+  `advanceBattleToTime`. Output: `{ scenarioId, status: ready|live|paused|final, speed, state,
+  progress, feed, elapsedMs, remainingMs, controls: { start, pause, resume, reset, advanceOneEvent,
+  setSpeed, finishNow, selectScenario } }`. Feed accumulates incrementally via `getFeedSince` inside
+  state updates; `accumulateFeed` returns a narrow Pick so spreads can't clobber state. Pause = stop
+  ticking; reset/selectScenario = fresh `createBattleState`. Engine clock stays authoritative.
+- `lib/battles/getBattleScript.ts` — the only lib addition (additive, read-only):
+  `getBattleScriptForState(state)` resolves the memoized script via the registered
+  `BattleScriptSource` for the price chart. No engine/scoring changes.
+- Pre-final rating display: engine exposes no pre-final estimate, so header shows a neutral
+  "Rating on the line — 1,684 vs 1,712 · applied at final" label; actual `±N → new rating` renders
+  from engine `finalResult.ratingChange` in header + end overlay. No Elo math in UI.
+- End-overlay dismissal tracked by `finalResult` object identity → reappears after Reset → Finish
+  now (engine immutability guarantees a fresh object).
+- recharts@^3.9.2 installed. react-hooks v6 lint rules required: no ref reads during render, no
+  setState-in-effect (feed accumulation lives in clock state updates).
+- **QA verdict (`qa-reviewer`): pass, no blockers/highs.** Deferred findings:
+  - MEDIUM → engine-side, later phase: expose an engine-computed *projected* rating movement on the
+    stepping API so the header can show pre-final "±N rating" per the brief (must NOT be computed
+    client-side — Rule 4).
+  - LOW polish (Phase 11 or with LOWs of later phases): Demo Controls shows disabled "Resume" at
+    FINAL (suggest "Replay"/Reset hint); end overlay (z-40) covers Demo Controls (z-30) so presenter
+    must dismiss before Reset; `BattleClockOutput.progress` exposed but unused by the screen;
+    engine flip-trade (long→short in one fill) would label SCALE_OUT/diamond — no scenario does this.
+
 ## Known state / gotchas
 
 - **Worked-example arithmetic**: the brief's component scores (78/91/88/80 vs 86/63/66/71) under strict
@@ -130,7 +165,6 @@ Launch **Phase 4 — Live Battle screen** with the `frontend-ui` agent. Everythi
 - Historical seed battle scores are authored demo data, internally consistent with 40/25/20/15 weights;
   plug-in points to regenerate via lib/scoring are commented in `buildDataset.ts` + `constants.ts`.
 - Git repo initialized on `main`; no remote yet.
-- Verification gates green as of `3ec124d`: `npm run build`, `npm run lint`, `npm test` (135/135),
-  `npm run seed`, `npm run battle -- <each of the 3 scenario ids>`.
-- Recharts NOT installed yet (Phase 4 installs it).
-- Working tree at handoff: only this file modified since `3ec124d`.
+- Verification gates green as of `bcba1cb`: `npm run build` (9 routes), `npm run lint`,
+  `npm test` (135/135), dev-server curl of `/battle` (200, READY state SSRs).
+- Working tree at handoff: only this file modified since `bcba1cb`.
