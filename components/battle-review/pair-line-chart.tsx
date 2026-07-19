@@ -37,6 +37,40 @@ function formatValue(value: number, kind: ValueKind): string {
   return formatSignedUsd(value);
 }
 
+const KIND_NOUN: Record<ValueKind, string> = {
+  pnl: "Net P&L",
+  drawdown: "Drawdown",
+  score: "Battle score",
+};
+
+/** Last non-null value of a series, for the text alternative. */
+function lastValue(data: PairPoint[], key: "demo" | "opponent"): number | null {
+  for (let i = data.length - 1; i >= 0; i -= 1) {
+    const v = data[i][key];
+    if (typeof v === "number") return v;
+  }
+  return null;
+}
+
+/** Summarizes the two-series trend for assistive tech (role="img"). */
+function buildAriaLabel(
+  data: PairPoint[],
+  kind: ValueKind,
+  demoName: string,
+  opponentName: string,
+): string {
+  const noun = KIND_NOUN[kind];
+  const demoLast = lastValue(data, "demo");
+  const opponentLast = lastValue(data, "opponent");
+  if (demoLast === null || opponentLast === null) {
+    return `${noun} over the battle for ${demoName} and ${opponentName}.`;
+  }
+  return (
+    `${noun} over the battle. ${demoName} finished at ${formatValue(demoLast, kind)}, ` +
+    `${opponentName} at ${formatValue(opponentLast, kind)}.`
+  );
+}
+
 interface PairLineChartProps {
   title: string;
   subtitle?: string;
@@ -92,7 +126,11 @@ export function PairLineChart({
           </span>
         </div>
       </div>
-      <div className="h-52">
+      <div
+        className="h-52"
+        role="img"
+        aria-label={buildAriaLabel(data, valueKind, demoName, opponentName)}
+      >
         <ResponsiveContainer width="100%" height="100%">
           <LineChart data={data} margin={{ top: 4, right: 8, bottom: 0, left: -6 }}>
             <CartesianGrid stroke="var(--border)" vertical={false} />

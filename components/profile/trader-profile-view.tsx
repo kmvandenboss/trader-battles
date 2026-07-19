@@ -21,7 +21,7 @@ import {
   formatRecord,
   formatScore,
   formatStreak,
-  MARKET_LABELS,
+  marketTicker,
 } from "@/components/battle/format";
 import {
   RatingHistoryChart,
@@ -104,7 +104,7 @@ export function TraderProfileView({ view }: { view: ProfileViewModel }) {
                 · {BATTLE_STYLE_LABELS[view.styleLabel]} style
               </p>
               <p className="mt-0.5 text-xs text-muted-foreground">
-                Primary {MARKET_LABELS[view.primaryMarket].split(" · ")[0]}
+                Primary {marketTicker(view.primaryMarket)}
                 {view.secondaryMarkets.length > 0
                   ? ` · Secondary ${view.secondaryMarkets.join(", ")}`
                   : null}

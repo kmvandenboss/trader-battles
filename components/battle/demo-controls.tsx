@@ -53,7 +53,7 @@ export function DemoControls({
 
   if (!open) {
     return (
-      <div className="fixed right-4 bottom-4 z-30">
+      <div className="fixed right-4 bottom-4 z-50">
         <Button
           variant="outline"
           size="sm"
@@ -68,7 +68,7 @@ export function DemoControls({
   }
 
   return (
-    <div className="fixed right-4 bottom-4 z-30 w-[19.5rem] rounded-xl border border-border bg-popover p-3 shadow-xl shadow-black/40">
+    <div className="fixed right-4 bottom-4 z-50 w-[19.5rem] rounded-xl border border-border bg-popover p-3 shadow-xl shadow-black/40">
       <div className="flex items-center gap-2">
         <FlaskConical className="size-3.5 text-primary" aria-hidden />
         <p className="text-xs font-semibold tracking-wide uppercase">
@@ -136,12 +136,13 @@ export function DemoControls({
             <Pause data-icon="inline-start" aria-hidden />
             Pause
           </Button>
+        ) : status === "final" ? (
+          <Button size="sm" onClick={controls.reset}>
+            <RotateCcw data-icon="inline-start" aria-hidden />
+            Replay
+          </Button>
         ) : (
-          <Button
-            size="sm"
-            onClick={controls.resume}
-            disabled={status === "final"}
-          >
+          <Button size="sm" onClick={controls.resume}>
             <Play data-icon="inline-start" aria-hidden />
             Resume
           </Button>

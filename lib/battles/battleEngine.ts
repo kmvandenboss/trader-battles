@@ -160,6 +160,32 @@ export interface BattleFinalResult {
   participants: [BattleParticipantResult, BattleParticipantResult];
 }
 
+export interface ProjectedRatingSide {
+  userId: string;
+  displayName: string;
+  /** Provisional outcome if the battle ended at the current clock. */
+  result: "WIN" | "LOSS" | "DRAW";
+  change: number;
+  newRating: number;
+}
+
+/**
+ * Engine-computed projection of the rating movement *if the battle ended now*.
+ * Uses the same authoritative `calculateRatingChange` as the final result, with
+ * `completionRatio` = fraction of the battle elapsed, so the projected movement
+ * grows toward the true value as the clock runs. The UI only displays this — it
+ * never computes rating math (Rule 4). `null` once the battle is COMPLETED
+ * (the real `finalResult` supersedes it).
+ */
+export interface BattleRatingProjection {
+  /** 0–1 fraction of the battle elapsed; movement scales with this. */
+  completionRatio: number;
+  /** True when scores are effectively level — no meaningful projection yet. */
+  tied: boolean;
+  demo: ProjectedRatingSide;
+  opponent: ProjectedRatingSide;
+}
+
 export interface BattleEngineState {
   /** Script id within its source (demo: one of the three scenario ids). */
   scenarioId: string;
@@ -189,6 +215,8 @@ export interface BattleEngineState {
   timeMarkersFired: number[];
   commentaryCheckpointsFired: number[];
   finalResult: BattleFinalResult | null;
+  /** Pre-final "rating on the line" projection; null once COMPLETED. */
+  projection: BattleRatingProjection | null;
 }
 
 // ---------------------------------------------------------------------------
@@ -292,6 +320,7 @@ export function createBattleState(
     timeMarkersFired: [],
     commentaryCheckpointsFired: [],
     finalResult: null,
+    projection: null,
   };
 
   pushFeed(state, "BATTLE_START", script.startTimestampMs, null, {
@@ -302,6 +331,7 @@ export function createBattleState(
     message: `Both traders start flat. Normalized scoring is live — performance, risk efficiency, discipline, and consistency all count.`,
     data: {},
   });
+  computeProjection(state);
   return state;
 }
 
@@ -635,6 +665,62 @@ function applyExecutionItem(
 }
 
 // ---------------------------------------------------------------------------
+// Pre-final rating projection
+// ---------------------------------------------------------------------------
+
+/**
+ * Recompute `state.projection` — what the rating change WOULD be if the battle
+ * ended at the current clock. Cleared once COMPLETED (finalResult takes over).
+ * Every number comes from the authoritative `calculateRatingChange`; nothing
+ * here (and nothing in the UI) invents rating math.
+ */
+function computeProjection(state: BattleEngineState): void {
+  if (state.status === "COMPLETED") {
+    state.projection = null;
+    return;
+  }
+  const demo = state.participants[state.demoUserId];
+  const opponent = state.participants[state.opponentUserId];
+  const completionRatio = Math.min(1, state.clockMs / state.durationMs);
+  const gap = demo.score.total - opponent.score.total;
+  const tied = Math.abs(gap) < LEAD_HYSTERESIS_POINTS;
+  const demoResult: "WIN" | "LOSS" | "DRAW" =
+    tied ? "DRAW" : gap > 0 ? "WIN" : "LOSS";
+  const opponentResult: "WIN" | "LOSS" | "DRAW" =
+    demoResult === "WIN" ? "LOSS" : demoResult === "LOSS" ? "WIN" : "DRAW";
+
+  const projectSide = (
+    self: BattleParticipantState,
+    other: BattleParticipantState,
+    result: "WIN" | "LOSS" | "DRAW",
+  ): ProjectedRatingSide => {
+    const rc = calculateRatingChange({
+      playerRating: self.rating,
+      opponentRating: other.rating,
+      playerScore: self.score.total,
+      opponentScore: other.score.total,
+      result,
+      completionRatio,
+      playerViolationCount: self.score.components.discipline.violations.length,
+    });
+    return {
+      userId: self.userId,
+      displayName: self.displayName,
+      result,
+      change: rc.change,
+      newRating: rc.newRating,
+    };
+  };
+
+  state.projection = {
+    completionRatio,
+    tied,
+    demo: projectSide(demo, opponent, demoResult),
+    opponent: projectSide(opponent, demo, opponentResult),
+  };
+}
+
+// ---------------------------------------------------------------------------
 // Finalization
 // ---------------------------------------------------------------------------
 
@@ -833,6 +919,7 @@ export function advanceBattle(
   if (next.cursor >= script.timeline.length) {
     finalize(next, next.startTimestampMs + next.durationMs);
   }
+  computeProjection(next);
   return next;
 }
 
@@ -854,6 +941,7 @@ export function advanceBattleToTime(
   if (elapsedMs >= state.durationMs && next.status !== "COMPLETED") {
     finalize(next, next.startTimestampMs + next.durationMs);
   }
+  computeProjection(next);
   return next;
 }
 

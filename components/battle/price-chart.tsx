@@ -158,6 +158,13 @@ export function PriceChart({
     [feed, state.opponentUserId],
   );
 
+  const priceAria =
+    revealed.length === 0
+      ? `${state.market} simulated intraday price tape (not yet revealed).`
+      : `${state.market} simulated intraday price tape, currently ` +
+        `${revealed[revealed.length - 1].price.toLocaleString("en-US")}, with ` +
+        `${demo.displayName} and ${opponent.displayName} entry and exit markers.`;
+
   return (
     <div className="rounded-xl border border-border bg-card p-4">
       <div className="mb-2 flex flex-wrap items-center justify-between gap-2">
@@ -187,7 +194,7 @@ export function PriceChart({
           <span>▲▼ entry / add · ◇ exit / trim</span>
         </div>
       </div>
-      <div className="h-64">
+      <div className="h-64" role="img" aria-label={priceAria}>
         <ResponsiveContainer width="100%" height="100%">
           <ComposedChart
             data={revealed}

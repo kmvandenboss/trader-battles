@@ -13,48 +13,29 @@
 
 ## ▶ NEXT ACTION (for the session picking this up)
 
-**The app is feature-complete.** Phase 8 (docs + full QA) is done — full-app QA verdict: PASS,
-all 14 MVP acceptance criteria met, all 6 non-negotiable rules clean, all gates green. The last
-remaining phase is **Phase 11 — Polish**: work through the backlog below, highest-impact first,
-re-verify gates (`npm run build` / `npm run lint` / `npm test` 139/139), run a final qa-reviewer
-pass, commit. Suggested order: the two MEDIUMs (real `/scoring` + `/integrations` pages), then
-chart a11y, then the cosmetic LOWs.
+**The app is feature-complete and polished.** Phase 11 (Polish) is DONE — see the Phase 11
+decisions section below. Gates green: `npm run lint`, `npm run build` (14 routes; `/scoring` +
+`/integrations` now `○ Static`), `npm test` **142/142**, `npm run battle` (KevinV winner
+confirmed), prod-server smoke (new pages 200 + real content). All items in the suggested order
+were completed, plus the Phase 4 engine-side projected-rating MEDIUM.
 
-### Polish backlog (Phase 11)
-- **MEDIUM — `/scoring` page is still a Phase-0 placeholder** (`app/scoring/page.tsx` renders
-  `PagePlaceholder`). Brief expects an in-app "How Scoring Works" page. Build it from
-  `docs/scoring.md` content (components/weights/penalties/worked example) with the frontend-ui
-  agent. README route table already honestly calls it a placeholder — update that row when built.
-- **MEDIUM — `/integrations` page is a bare placeholder** (`app/integrations/page.tsx`). Brief
-  wants the planned-provider matrix (status / connection method / data expected / verification
-  level). Render it from `docs/integration-roadmap.md` content. Keep "no partnership implied."
-- **Chart a11y**: `battle-review/pair-line-chart.tsx` still has no text alternative (the Phase 7
-  rating charts + dashboard sparkline now do — `role="img"` + summarizing `aria-label`). Add the
-  same to `pair-line-chart.tsx` and the live-battle charts for consistency.
-- **Phase 8 QA LOW**: `components/layout/site-header.tsx:87` hardcodes the "KevinV" identity
-  chip; the async root layout already calls repositories — pass the display name as a prop.
-- **Phase 7 QA LOWs** (cosmetic, not fixed): (a) `components/layout/notifications-menu.tsx:73`
-  `formatDateTime` omits the year → older seeded notifications show month/day only; (b)
-  `app/firms/[slug]/page.tsx:164` uses `MARKET_LABELS[m].split(" · ")[1]` to show the market
-  descriptor — relies on the " · " label shape; a dedicated market-name accessor would be safer.
-- **Chart a11y**: `battle-review/pair-line-chart.tsx` still has no text alternative (the Phase 7
-  rating charts + dashboard sparkline now do — `role="img"` + summarizing `aria-label`). Add the
-  same to `pair-line-chart.tsx` and the live-battle charts for consistency.
-- **Phase 7 QA LOWs** (cosmetic, not fixed): (a) `components/layout/notifications-menu.tsx:73`
-  `formatDateTime` omits the year → older seeded notifications show month/day only; (b)
-  `app/firms/[slug]/page.tsx:164` uses `MARKET_LABELS[m].split(" · ")[1]` to show the market
-  descriptor — relies on the " · " label shape; a dedicated market-name accessor would be safer.
-- **Phase 5 LOWs** (still open): nav has "Find a Battle" + "Live Battle" as siblings (fine post
-  Phase-6 dashboard CTA, revisit in polish); `app/matchmaking/page.tsx` hardcodes
-  `probeElapsedMs = 600_000` — an engine-side `isMarketMatchable(request, queue)` helper would
-  remove the timing assumption.
-- **Phase 4 MEDIUM** (engine-side): expose an engine-computed *projected* pre-final rating
-  movement on the stepping API so the live header can show "±N rating" before the final bell
-  (must NOT be computed client-side — Rule 4). Currently the header shows a neutral
-  "Rating on the line" label until the engine's `finalResult.ratingChange` lands.
-- **Phase 4 LOWs**: Demo Controls shows disabled "Resume" at FINAL (suggest "Replay"/Reset hint);
-  end overlay (z-40) covers Demo Controls (z-30) so presenter must dismiss before Reset;
-  `BattleClockOutput.progress` exposed but unused by the screen.
+If continuing: the only backlog items intentionally left are two low-value ones — the Phase 5
+`probeElapsedMs = 600_000` timing assumption in `app/matchmaking/page.tsx` (an engine-side
+`isMarketMatchable(request, queue)` helper would remove it) and the unused
+`BattleClockOutput.progress`. Nav still lists "Find a Battle" + "Live Battle" as siblings (a
+deliberate keep — the dashboard CTA is the primary entry). Everything else is resolved.
+
+### Polish backlog (Phase 11) — all resolved except the two noted above
+- ✅ **MEDIUM — real `/scoring` page** ("How Scoring Works"): built from `docs/scoring.md`.
+- ✅ **MEDIUM — real `/integrations` page**: planned-provider matrix from `docs/integration-roadmap.md`.
+- ✅ **Chart a11y**: `role="img"` + aria-label on pair-line-chart + both live-battle charts.
+- ✅ **Phase 8 LOW**: header identity chip is now a prop wired from the root layout.
+- ✅ **Phase 7 LOWs**: `formatDateTime` includes the year; `marketTicker`/`marketName` accessors
+  replaced the fragile `.split(" · ")` idiom.
+- ✅ **Phase 4 MEDIUM**: engine-computed projected pre-final rating (see Phase 11 decisions).
+- ✅ **Phase 4 LOWs**: Demo Controls shows an active "Replay" at FINAL; z-index raised above the
+  end overlay so the presenter can Reset without dismissing.
+- ⏸ **Phase 5 LOW** (left): `probeElapsedMs = 600_000` timing assumption; unused `progress`.
 
 ## Phase status
 
@@ -68,8 +49,8 @@ chart a11y, then the cosmetic LOWs.
 | 5 — Matchmaking flow | ✅ done | `3216e43` |
 | 6 — Dashboard, result, review | ✅ done | `5554768` |
 | 7 — Leaderboards, profiles, leagues, history | ✅ done | `4cc0e3c` |
-| 8 — Docs + full QA | ✅ done | _this commit_ |
-| 11 — Polish (backlog above) | ⏳ next | |
+| 8 — Docs + full QA | ✅ done | `64dbfa1` |
+| 11 — Polish (backlog above) | ✅ done | _this commit_ |
 
 ## Decisions made so far (beyond CLAUDE.md's locked ones)
 
@@ -322,6 +303,51 @@ chart a11y, then the cosmetic LOWs.
   deferred to the Phase 11 backlog above per QA's recommendation; README's `/scoring` row
   reworded pre-commit to stop overstating the page. 1 new LOW (hardcoded header identity chip)
   added to backlog.
+
+### Phase 11 decisions (polish)
+
+- **`/scoring` — "How Scoring Works"** (`app/scoring/page.tsx`, frontend-ui agent): real static
+  server page built verbatim from `docs/scoring.md`. Four-component weight overview (40/25/20/15
+  bars), per-component sub-factor cards, the 5-row discipline-penalty table, the KevinV vs
+  DeltaHunter worked example (78/91/88/80 vs 86/63/66/71 → 83.55/74.00 with the honest-arithmetic
+  block), an Elo rating-change summary, and "why reckless risk doesn't pay". New primitives:
+  `components/scoring/scoring-primitives.tsx` (`ComponentWeightBar`, `SubFactorRow`). **Imports NO
+  `lib/scoring`/`lib/ratings` — every figure is fixed display copy (Rule 4).** Prerenders `○ Static`.
+- **`/integrations` — roadmap** (`app/integrations/page.tsx`): real static page from
+  `docs/integration-roadmap.md`. Honest "nothing connected / no partnership implied" banner,
+  planned-provider matrix (NinjaTrader→CLIENT_VERIFIED, Tradovate→PROVIDER_VERIFIED, Rithmic,
+  CQG/ProjectX, partner infra — every card "Not connected"), SIMULATED→CLIENT_VERIFIED→
+  PROVIDER_VERIFIED row, the 5 drop-in seams, "TradingView deliberately not planned". New:
+  `components/integrations/provider-card.tsx`. Prerenders `○ Static`. README route table +
+  limitations reworded (both rows no longer say "placeholder").
+- **Engine-computed projected rating (Phase 4 MEDIUM, Rule 4-safe)**: `lib/battles/battleEngine.ts`
+  now exposes `state.projection: BattleRatingProjection | null` (`ProjectedRatingSide` per trader —
+  result/change/newRating, plus `completionRatio` + `tied`). `computeProjection(state)` calls the
+  SAME `calculateRatingChange` as `finalize`, with `completionRatio = clockMs/durationMs`, so the
+  projected movement grows toward the true value as the clock runs; recomputed at
+  `createBattleState`/`advanceBattle`/`advanceBattleToTime`, cleared to `null` once COMPLETED
+  (finalResult supersedes). `components/battle/battle-header.tsx` renders it labeled "Projected
+  rating · applied at final" once scores separate (`!tied`), else the neutral "Rating on the line"
+  label; the UI computes no rating math. 3 new tests (start tied@0, leader-ahead@75%, deterministic
+  + cleared-at-final + projected-winner-matches-actual). **Tests now 142.**
+- **Chart a11y**: `role="img"` + summarizing `aria-label` added to
+  `components/battle-review/pair-line-chart.tsx` (final values per series),
+  `components/battle/score-timeline-chart.tsx`, `components/battle/price-chart.tsx` — matches the
+  Phase 7 rating-chart/sparkline pattern. Labels derive from the last non-null data point.
+- **Cosmetic LOWs**: site-header identity chip is now a `HeaderUser` prop wired from `app/layout.tsx`
+  (`displayName`/`subtitle`/`initials` via `formatLeague`+`initialsFor`) — no hardcoded "KevinV".
+  `format.ts` gained `marketTicker`/`marketName` (single source, replaced `.split(" · ")` in firm
+  page + head-to-head + opponent-reveal + trader-profile-view) and its datetime format now includes
+  the year (fixes notifications-menu + activity-feed older items). `demo-controls.tsx`: FINAL now
+  shows an active "Replay" (→ reset) instead of a disabled "Resume", and its z-index raised to z-50
+  so the presenter reaches Reset without dismissing the z-40 end overlay.
+- Prohibited-gambling-term scan clean (reworded a "stakes" code comment → "movement"). No
+  `lib/scoring`/`lib/ratings` imports in `app/` or `components/`.
+- **QA verdict (`qa-reviewer`): PASS — no blocker/high/medium.** All 6 rules re-confirmed
+  (gambling + profitability scans clean, no scoring/ratings imports in UI, projection determinism
+  test passes). Gates: lint, build (14 routes, both new pages `○ Static`), 142/142 tests,
+  headless battle (KevinV winner). 1 informational LOW: `/scoring` shows the honest 83.55/74.00
+  (not the brief's published 83.9/73.6) — intentional, documented in `docs/scoring.md`. No fixes.
 
 ## Known state / gotchas
 

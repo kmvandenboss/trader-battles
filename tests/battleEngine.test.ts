@@ -276,6 +276,51 @@ describe("scenario: aggression-backfires", () => {
   });
 });
 
+describe("pre-final rating projection", () => {
+  it("starts tied at zero completion", () => {
+    const state = createBattleState("discipline-beats-raw-profit");
+    expect(state.projection).not.toBeNull();
+    expect(state.projection!.completionRatio).toBe(0);
+    expect(state.projection!.tied).toBe(true);
+  });
+
+  it("projects the leader ahead once scores separate, from the rating engine", () => {
+    const state = advanceBattleToTime(
+      createBattleState("discipline-beats-raw-profit"),
+      75 * 60_000,
+    );
+    expect(state.status).toBe("LIVE");
+    const projection = state.projection!;
+    expect(projection.tied).toBe(false);
+    // KevinV leads this scenario on normalized score.
+    expect(projection.demo.result).toBe("WIN");
+    expect(projection.demo.change).toBeGreaterThan(0);
+    expect(projection.opponent.change).toBeLessThan(0);
+    expect(projection.completionRatio).toBeCloseTo(75 / 90, 5);
+  });
+
+  it("is deterministic and cleared once the battle completes", () => {
+    const a = advanceBattleToTime(
+      createBattleState("discipline-beats-raw-profit"),
+      60 * 60_000,
+    );
+    const b = advanceBattleToTime(
+      createBattleState("discipline-beats-raw-profit"),
+      60 * 60_000,
+    );
+    expect(JSON.stringify(a.projection)).toBe(JSON.stringify(b.projection));
+
+    // The projected winner just before the bell matches the actual result.
+    const projectedWinnerAhead = a.projection!.demo.change > 0;
+    const final = advanceBattleToEnd(a).finalResult!;
+    const demoFinal = final.participants.find(
+      (p) => p.userId === a.demoUserId,
+    )!;
+    expect(demoFinal.ratingChange.change > 0).toBe(projectedWinnerAhead);
+    expect(advanceBattleToEnd(a).projection).toBeNull();
+  });
+});
+
 describe("engine authority over scores", () => {
   it("final result carries full authoritative score breakdowns", () => {
     const state = runToEnd("discipline-beats-raw-profit");

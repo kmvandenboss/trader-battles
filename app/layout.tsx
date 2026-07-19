@@ -2,10 +2,11 @@ import type { Metadata } from "next";
 import { Geist, Geist_Mono } from "next/font/google";
 import "./globals.css";
 import { DemoNotice } from "@/components/layout/demo-notice";
-import { SiteHeader } from "@/components/layout/site-header";
+import { SiteHeader, type HeaderUser } from "@/components/layout/site-header";
 import { SiteFooter } from "@/components/layout/site-footer";
 import { getRepositories } from "@/lib/data/repositories";
 import type { HeaderNotification } from "@/components/layout/notifications-menu";
+import { formatLeague, initialsFor } from "@/components/battle/format";
 
 const geistSans = Geist({
   variable: "--font-geist-sans",
@@ -46,6 +47,11 @@ export default async function RootLayout({
     read: n.read,
     createdAt: n.createdAt,
   }));
+  const headerUser: HeaderUser = {
+    displayName: demo.user.displayName,
+    subtitle: `${formatLeague(demo.profile.league, demo.profile.division)} · ${demo.profile.rating.toLocaleString("en-US")}`,
+    initials: initialsFor(demo.user.displayName),
+  };
 
   return (
     <html
@@ -57,6 +63,7 @@ export default async function RootLayout({
         <SiteHeader
           notifications={headerNotifications}
           unreadCount={unreadCount}
+          user={headerUser}
         />
         <main className="mx-auto w-full max-w-7xl flex-1 px-4 py-8 sm:px-6 lg:px-8">
           {children}

@@ -4,9 +4,12 @@
  * Battle header — type, market, session window, countdown, status badge,
  * battle ID, rating movement, and the demo-data verification indicator.
  *
- * Rating movement is a competitive result, never financial. Before the final
- * the engine exposes no estimate, so we show a neutral "rating on the line"
- * label; once finalResult exists we render the engine-computed changes.
+ * Rating movement is a competitive result, never financial. Before the final,
+ * the engine exposes a *projected* movement (state.projection) computed by the
+ * same rating engine as if the battle ended now; we render it, clearly marked
+ * "projected", once scores separate, and fall back to a neutral label while
+ * tied. Once finalResult exists we render the engine-computed final changes.
+ * All rating numbers come from the engine — the UI never computes them.
  */
 
 import { ShieldCheck } from "lucide-react";
@@ -21,6 +24,12 @@ import {
   formatCountdown,
   formatRatingDelta,
 } from "./format";
+
+function ratingTone(change: number): string {
+  if (change > 0) return "text-positive";
+  if (change < 0) return "text-negative";
+  return "text-foreground";
+}
 
 const STATUS_META: Record<
   BattleClockStatus,
@@ -66,6 +75,11 @@ export function BattleHeader({
   const demo = state.participants[state.demoUserId];
   const opponent = state.participants[state.opponentUserId];
   const finalParticipants = state.finalResult?.participants ?? null;
+  // Show the engine's projected movement once scores have separated.
+  const projection =
+    !finalParticipants && state.projection && !state.projection.tied
+      ? state.projection
+      : null;
 
   return (
     <section className="rounded-xl border border-border bg-card px-4 py-3 sm:px-5">
@@ -107,19 +121,32 @@ export function BattleHeader({
                     {p.displayName}{" "}
                   </span>
                   <span
-                    className={cn(
-                      "font-semibold",
-                      p.ratingChange.change > 0
-                        ? "text-positive"
-                        : p.ratingChange.change < 0
-                          ? "text-negative"
-                          : "text-foreground",
-                    )}
+                    className={cn("font-semibold", ratingTone(p.ratingChange.change))}
                   >
                     {formatRatingDelta(p.ratingChange.change)} rating
                   </span>
                 </span>
               ))}
+            </div>
+          ) : projection ? (
+            <div className="text-right sm:text-left">
+              <div className="flex items-center gap-3">
+                {[projection.demo, projection.opponent].map((side) => (
+                  <span key={side.userId} className="tabular-nums">
+                    <span className="text-muted-foreground">
+                      {side.displayName}{" "}
+                    </span>
+                    <span
+                      className={cn("font-semibold", ratingTone(side.change))}
+                    >
+                      {formatRatingDelta(side.change)}
+                    </span>
+                  </span>
+                ))}
+              </div>
+              <p className="text-[10px] tracking-wide text-muted-foreground uppercase">
+                Projected rating · applied at final
+              </p>
             </div>
           ) : (
             <div className="text-right sm:text-left">

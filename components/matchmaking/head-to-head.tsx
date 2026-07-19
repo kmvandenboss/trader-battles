@@ -24,7 +24,7 @@ import {
 } from "@/lib/battles/scenarios";
 import {
   BATTLE_STYLE_LABELS,
-  MARKET_LABELS,
+  marketTicker,
   formatRecord,
   formatStreak,
 } from "@/components/battle/format";
@@ -204,8 +204,8 @@ export function HeadToHead({
           />
           <CompareRow
             label="Primary market"
-            left={MARKET_LABELS[demo.primaryMarket].split(" · ")[0]}
-            right={MARKET_LABELS[opponent.primaryMarket].split(" · ")[0]}
+            left={marketTicker(demo.primaryMarket)}
+            right={marketTicker(opponent.primaryMarket)}
           />
         </div>
 

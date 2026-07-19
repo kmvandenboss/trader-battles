@@ -42,6 +42,16 @@ export const MARKET_LABELS: Record<Market, string> = {
   GC: "GC · Gold",
 };
 
+/** Just the ticker symbol, e.g. "NQ" — safer than splitting MARKET_LABELS. */
+export function marketTicker(market: Market): string {
+  return MARKET_LABELS[market].split(" · ")[0];
+}
+
+/** Just the market name/descriptor, e.g. "E-mini Nasdaq-100". */
+export function marketName(market: Market): string {
+  return MARKET_LABELS[market].split(" · ")[1] ?? market;
+}
+
 export const BATTLE_STYLE_LABELS: Record<BattleStyle, string> = {
   BALANCED: "Balanced",
   AGGRESSIVE: "Aggressive",
@@ -131,6 +141,7 @@ const ET_DATETIME_FORMAT = new Intl.DateTimeFormat("en-US", {
   timeZone: "America/New_York",
   month: "short",
   day: "numeric",
+  year: "numeric",
   hour: "numeric",
   minute: "2-digit",
 });
@@ -140,7 +151,7 @@ export function formatDate(iso: string): string {
   return ET_DATE_FORMAT.format(new Date(Date.parse(iso)));
 }
 
-/** Short date + time in ET for an ISO timestamp, e.g. "Jul 17, 1:00 PM". */
+/** Short date + time in ET for an ISO timestamp, e.g. "Jul 17, 2026, 1:00 PM". */
 export function formatDateTime(iso: string): string {
   return ET_DATETIME_FORMAT.format(new Date(Date.parse(iso)));
 }

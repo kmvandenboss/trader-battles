@@ -62,6 +62,21 @@ export function ScoreTimelineChart({
 
   const durationMin = Math.round(durationMs / 60_000);
 
+  const lastScore = (key: "demo" | "opponent"): number | null => {
+    for (let i = data.length - 1; i >= 0; i -= 1) {
+      const v = data[i][key];
+      if (typeof v === "number") return v;
+    }
+    return null;
+  };
+  const demoScore = lastScore("demo");
+  const opponentScore = lastScore("opponent");
+  const ariaLabel =
+    demoScore === null || opponentScore === null
+      ? `Battle score over time for ${demo.displayName} and ${opponent.displayName}.`
+      : `Battle score over time. ${demo.displayName} at ${demoScore.toFixed(1)}, ` +
+        `${opponent.displayName} at ${opponentScore.toFixed(1)}, on a 0 to 100 scale.`;
+
   return (
     <div className="rounded-xl border border-border bg-card p-4">
       <div className="mb-2 flex items-center justify-between">
@@ -85,7 +100,7 @@ export function ScoreTimelineChart({
           </span>
         </div>
       </div>
-      <div className="h-48">
+      <div className="h-48" role="img" aria-label={ariaLabel}>
         <ResponsiveContainer width="100%" height="100%">
           <LineChart
             data={data}

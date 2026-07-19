@@ -22,12 +22,26 @@ function isActive(pathname: string, href: string): boolean {
   return pathname === href || pathname.startsWith(`${href}/`);
 }
 
+/** The pre-authenticated demo user, resolved server-side and passed in. */
+export interface HeaderUser {
+  displayName: string;
+  /** e.g. "Gold II · 1,684" — already-formatted league + rating. */
+  subtitle: string;
+  /** Avatar initials, e.g. "KV". */
+  initials: string;
+}
+
 interface SiteHeaderProps {
   notifications: HeaderNotification[];
   unreadCount: number;
+  user: HeaderUser;
 }
 
-export function SiteHeader({ notifications, unreadCount }: SiteHeaderProps) {
+export function SiteHeader({
+  notifications,
+  unreadCount,
+  user,
+}: SiteHeaderProps) {
   const pathname = usePathname();
 
   return (
@@ -84,14 +98,14 @@ export function SiteHeader({ notifications, unreadCount }: SiteHeaderProps) {
             className="flex items-center gap-2.5 rounded-full transition-opacity hover:opacity-80"
           >
             <div className="hidden text-right leading-tight md:block">
-              <p className="text-sm font-medium">KevinV</p>
-              <p className="text-xs text-muted-foreground">Gold II · 1,684</p>
+              <p className="text-sm font-medium">{user.displayName}</p>
+              <p className="text-xs text-muted-foreground">{user.subtitle}</p>
             </div>
             <span
               aria-hidden
               className="flex size-8 items-center justify-center rounded-full border border-primary/40 bg-primary/15 text-xs font-semibold text-primary"
             >
-              KV
+              {user.initials}
             </span>
           </Link>
         </div>

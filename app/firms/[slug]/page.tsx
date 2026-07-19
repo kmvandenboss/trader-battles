@@ -17,7 +17,7 @@ import { StatPill } from "@/components/battle/stat-pill";
 import {
   FIRM_KIND_LABELS,
   formatRecord,
-  MARKET_LABELS,
+  marketName,
 } from "@/components/battle/format";
 
 export async function generateMetadata({
@@ -161,7 +161,7 @@ export default async function FirmProfilePage({
                     className="flex items-center justify-between text-sm"
                   >
                     <span className="text-muted-foreground">
-                      {MARKET_LABELS[m.market].split(" · ")[1] ?? m.market}
+                      {marketName(m.market)}
                       <span className="ml-1.5 font-medium text-foreground">
                         {m.market}
                       </span>

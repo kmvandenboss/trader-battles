@@ -72,8 +72,8 @@ Scenario ids for `npm run battle` (defined in `lib/battles/scenarios.ts`):
 | `/profile/[userId]` | Any seeded trader's profile |
 | `/firms/[slug]` | Demo prop-firm team pages (MFFU, Tradeify, Apex, Topstep, …) — demo data, no partnership implied |
 | `/leagues` | Bronze → Elite ladder, divisions, promotion/demotion progress |
-| `/scoring` | How Scoring Works — placeholder page today; the full model is documented in [docs/scoring.md](docs/scoring.md) |
-| `/integrations` | Coming-soon placeholder for future platform connections |
+| `/scoring` | How Scoring Works — in-app explainer of the four weighted components, discipline penalties, the KevinV vs DeltaHunter worked example, and the Elo-style rating change (mirrors [docs/scoring.md](docs/scoring.md)) |
+| `/integrations` | Integration roadmap — planned-provider matrix (status / connection / data / verification level), the five drop-in seams, and an explicit "nothing connected, no partnership implied" status (mirrors [docs/integration-roadmap.md](docs/integration-roadmap.md)) |
 
 ## Data and the seed process
 
@@ -120,7 +120,7 @@ These are enforced throughout the codebase (see `CLAUDE.md`):
 ## Known limitations
 
 - **No real integrations.** NinjaTrader / Tradovate / Rithmic folders are README stubs only; the
-  `/integrations` page is a coming-soon placeholder.
+  `/integrations` page documents the planned roadmap, but nothing is connected — all data is simulated.
 - **Only the seeded showcase battle** (KevinV vs DeltaHunter, battle-189) carries full intra-battle
   telemetry (execution events, account snapshots, metric timelines). The other 189 seeded battles have
   final metric snapshots only, so their review pages hide the chart/trade sections and say so.

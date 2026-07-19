@@ -12,7 +12,7 @@ import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import {
   BATTLE_STYLE_LABELS,
-  MARKET_LABELS,
+  marketTicker,
 } from "@/components/battle/format";
 import { LeagueBadge } from "@/components/battle/league-badge";
 import { TraderAvatar } from "@/components/battle/trader-avatar";
@@ -59,7 +59,7 @@ export function OpponentReveal({ opponent, onContinue }: OpponentRevealProps) {
           {opponent.firmName}
           {opponent.accountLabel ? ` · ${opponent.accountLabel}` : ""} ·{" "}
           {BATTLE_STYLE_LABELS[opponent.battleStyle]} ·{" "}
-          {MARKET_LABELS[opponent.primaryMarket].split(" · ")[0]} primary
+          {marketTicker(opponent.primaryMarket)} primary
         </p>
 
         <Badge variant="outline" className="mt-4 text-[10px] text-muted-foreground">
