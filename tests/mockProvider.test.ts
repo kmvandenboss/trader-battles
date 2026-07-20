@@ -9,7 +9,7 @@ import { mockProvider, setMockActiveScenario } from "@/lib/integrations/provider
 import { generateBattleScript } from "@/lib/integrations/providers/mock/mockEventGenerator";
 import type { NormalizedExecutionEvent } from "@/lib/integrations/types";
 
-const KEVIN_ACCOUNT = "MFFU-50K-84127";
+const KEVIN_ACCOUNT = "SIM-50K-84127";
 
 describe("mockProvider (TradingIntegrationProvider)", () => {
   it("connects and disconnects known demo accounts as SIMULATED", async () => {
@@ -20,7 +20,7 @@ describe("mockProvider (TradingIntegrationProvider)", () => {
     expect(account.provider).toBe("mock");
     expect(account.status).toBe("CONNECTED");
     expect(account.verificationStatus).toBe("SIMULATED");
-    expect(account.displayName).toBe("MFFU 50K Rapid");
+    expect(account.displayName).toBe("50K Rapid");
     await mockProvider.disconnectAccount(account.accountId);
   });
 

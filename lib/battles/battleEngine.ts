@@ -324,7 +324,7 @@ export function createBattleState(
   };
 
   pushFeed(state, "BATTLE_START", script.startTimestampMs, null, {
-    message: `Battle live: ${demo.displayName} (${demo.firmName}) vs ${opponent.displayName} (${opponent.firmName}) — ${script.market}, ${Math.round(script.durationMs / 60_000)} minutes. Simulated demo data.`,
+    message: `Battle live: ${demo.displayName} vs ${opponent.displayName} — ${script.market}, ${Math.round(script.durationMs / 60_000)} minutes. Simulated demo data.`,
     data: { scenarioId },
   });
   pushFeed(state, "COMMENTARY", script.startTimestampMs, null, {

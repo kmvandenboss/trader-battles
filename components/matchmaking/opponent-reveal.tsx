@@ -56,8 +56,7 @@ export function OpponentReveal({ opponent, onContinue }: OpponentRevealProps) {
           </span>
         </div>
         <p className="mt-2 text-xs text-muted-foreground">
-          {opponent.firmName}
-          {opponent.accountLabel ? ` · ${opponent.accountLabel}` : ""} ·{" "}
+          {opponent.accountLabel ? `${opponent.accountLabel} · ` : ""}
           {BATTLE_STYLE_LABELS[opponent.battleStyle]} ·{" "}
           {marketTicker(opponent.primaryMarket)} primary
         </p>

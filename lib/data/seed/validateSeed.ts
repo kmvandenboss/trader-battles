@@ -291,7 +291,7 @@ export function validateSeedDataset(data: SeedDataset): string[] {
     const kevinAccount = data.tradingAccounts.find((a) => a.userId === kevinId);
     if (!kevinAccount) fail("KevinV has no trading account");
     else {
-      if (kevinAccount.metadata.planName !== "MFFU 50K Rapid")
+      if (kevinAccount.metadata.planName !== "50K Rapid")
         fail(`KevinV account plan: ${kevinAccount.metadata.planName}`);
       if (kevinAccount.connectionStatus !== "CONNECTED")
         fail("KevinV account not CONNECTED");

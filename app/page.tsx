@@ -146,7 +146,7 @@ export default async function HomePage() {
                 </Badge>
               </div>
               <p className="mt-1 text-sm text-muted-foreground">
-                {demoTrader.firm.name} · {formatLeague(profile.league, profile.division)} · Primary{" "}
+                {formatLeague(profile.league, profile.division)} · Primary{" "}
                 {profile.primaryMarket}
               </p>
               <div className="mt-3 flex flex-wrap gap-2">

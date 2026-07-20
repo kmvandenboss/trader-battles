@@ -42,7 +42,7 @@ export const BATTLE_WINDOW_START_UTC: Record<BattleWindow, string> = {
 // ---------------------------------------------------------------------------
 
 export interface AccountRuleSet {
-  /** Plan label shown in the UI, e.g. "MFFU 50K Rapid" (Simulated Demo Data). */
+  /** Plan label shown in the UI, e.g. "50K Rapid" (Simulated Demo Data). */
   accountLabel: string;
   /** Provider-scoped external account id (matches the seed dataset). */
   externalAccountId: string;
@@ -50,10 +50,10 @@ export interface AccountRuleSet {
   limits: BattleRiskLimits;
 }
 
-/** KevinV's demo account (matches the seed dataset's MFFU 50K Rapid). */
+/** KevinV's demo account (matches the seed dataset's 50K Rapid). */
 export const MFFU_50K_RAPID: AccountRuleSet = {
-  accountLabel: "MFFU 50K Rapid",
-  externalAccountId: "MFFU-50K-84127",
+  accountLabel: "50K Rapid",
+  externalAccountId: "SIM-50K-84127",
   startingBalance: 50_000,
   limits: {
     permittedRisk: 1250,
@@ -64,8 +64,8 @@ export const MFFU_50K_RAPID: AccountRuleSet = {
 
 /** DeltaHunter's demo account (matches the seed dataset). */
 export const TRADEIFY_50K_ADVANCED: AccountRuleSet = {
-  accountLabel: "Tradeify 50K Advanced",
-  externalAccountId: "TRADEIFY-50K-31552",
+  accountLabel: "50K Rapid",
+  externalAccountId: "SIM-50K-31552",
   startingBalance: 50_000,
   limits: {
     permittedRisk: 1500,

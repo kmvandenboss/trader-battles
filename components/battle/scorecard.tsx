@@ -84,7 +84,7 @@ export function TraderScorecard({
               {participant.displayName}
             </h2>
             <p className="truncate text-xs text-muted-foreground">
-              {participant.firmName} · {participant.accountLabel}
+              {participant.accountLabel}
             </p>
             <p className="text-xs text-muted-foreground tabular-nums">
               Rating {participant.rating.toLocaleString("en-US")}

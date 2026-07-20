@@ -53,9 +53,6 @@ export function FinalScorecard({ participant, emphasis }: FinalScorecardProps) {
           league={participant.league}
           division={participant.division}
         />
-        <span className="text-[11px] text-muted-foreground">
-          {participant.firmName}
-        </span>
       </div>
       <p
         className={cn(

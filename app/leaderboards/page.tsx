@@ -1,6 +1,6 @@
 /**
  * /leaderboards — season rankings. Server component: filters flow purely
- * through URL search params (?league&market&firmSlug), the page re-queries the
+ * through URL search params (?league&market), the page re-queries the
  * LeaderboardRepository, and renders the already-computed ranks/win rates.
  * Nothing (rank, win rate, standing) is computed in the UI.
  */
@@ -30,13 +30,12 @@ import { cn } from "@/lib/utils";
 export const metadata: Metadata = {
   title: "Leaderboards",
   description:
-    "Global, league, market, and firm rankings across the season — rating, record, win rate, and streak. Simulated demo data.",
+    "Global, league, and market rankings across the season — rating, record, win rate, and streak. Simulated demo data.",
 };
 
 interface LeaderboardsSearchParams {
   league?: string;
   market?: string;
-  firmSlug?: string;
 }
 
 export default async function LeaderboardsPage({
@@ -45,13 +44,7 @@ export default async function LeaderboardsPage({
   searchParams: Promise<LeaderboardsSearchParams>;
 }) {
   const params = await searchParams;
-  const { traders, leaderboards, firms } = getRepositories();
-
-  const firmStandings = await firms.list();
-  const firmOptions = firmStandings.map((f) => ({
-    value: f.firm.slug,
-    label: f.firm.name,
-  }));
+  const { traders, leaderboards } = getRepositories();
 
   // Validate params against known values; ignore anything unrecognized.
   const league = LEAGUES.includes(params.league as League)
@@ -60,14 +53,11 @@ export default async function LeaderboardsPage({
   const market = MARKETS.includes(params.market as Market)
     ? (params.market as Market)
     : undefined;
-  const firmSlug = firmOptions.some((f) => f.value === params.firmSlug)
-    ? params.firmSlug
-    : undefined;
 
   const demoTrader = await traders.getDemoTrader();
   const demoUserId = demoTrader.user.id;
   const [{ entries, total }, standing] = await Promise.all([
-    leaderboards.query({ league, market, firmSlug }),
+    leaderboards.query({ league, market }),
     leaderboards.getStanding(demoUserId),
   ]);
 
@@ -110,7 +100,7 @@ export default async function LeaderboardsPage({
               />
               <span className="text-muted-foreground">— your standing</span>
             </div>
-            <div className="grid grid-cols-2 gap-2 sm:grid-cols-4">
+            <div className="grid grid-cols-2 gap-2 sm:grid-cols-3">
               <StatPill
                 label="Global rank"
                 value={`#${standing.globalRank} / ${standing.totalTraders}`}
@@ -118,10 +108,6 @@ export default async function LeaderboardsPage({
               <StatPill
                 label="Percentile"
                 value={topPercent !== null ? `Top ${topPercent}%` : "—"}
-              />
-              <StatPill
-                label="Firm rank"
-                value={`#${standing.firmRank} / ${standing.firmTraders}`}
               />
               <StatPill
                 label={`${demoTrader.profile.primaryMarket} rank`}
@@ -150,12 +136,6 @@ export default async function LeaderboardsPage({
             options: MARKETS.map((m) => ({ value: m, label: m })),
             allLabel: "All markets",
           },
-          {
-            paramKey: "firmSlug",
-            label: "Firm",
-            options: firmOptions,
-            allLabel: "All firms",
-          },
         ]}
       />
 
@@ -164,7 +144,7 @@ export default async function LeaderboardsPage({
         <div className="flex items-center justify-between border-b border-border/60 px-4 py-2.5 text-xs text-muted-foreground">
           <span>
             {total} trader{total === 1 ? "" : "s"}
-            {league || market || firmSlug ? " (filtered)" : ""}
+            {league || market ? " (filtered)" : ""}
           </span>
           <span className="tracking-wide uppercase">Simulated</span>
         </div>
@@ -185,7 +165,6 @@ export default async function LeaderboardsPage({
                   <th className="px-4 py-2 text-right font-medium">Win rate</th>
                   <th className="px-4 py-2 text-right font-medium">Streak</th>
                   <th className="px-4 py-2 font-medium">Market</th>
-                  <th className="px-4 py-2 font-medium">Firm</th>
                 </tr>
               </thead>
               <tbody>
@@ -249,14 +228,6 @@ export default async function LeaderboardsPage({
                       </td>
                       <td className="px-4 py-2.5 text-muted-foreground">
                         {t.profile.primaryMarket}
-                      </td>
-                      <td className="px-4 py-2.5">
-                        <Link
-                          href={`/firms/${t.firm.slug}`}
-                          className="text-muted-foreground underline-offset-2 hover:text-foreground hover:underline"
-                        >
-                          {t.firm.name}
-                        </Link>
                       </td>
                     </tr>
                   );

@@ -95,13 +95,7 @@ export function TraderProfileView({ view }: { view: ProfileViewModel }) {
                 </Badge>
               </div>
               <p className="mt-1 text-sm text-muted-foreground">
-                <Link
-                  href={`/firms/${view.firmSlug}`}
-                  className="text-foreground/90 underline-offset-2 hover:text-primary hover:underline"
-                >
-                  {view.firmName}
-                </Link>{" "}
-                · {BATTLE_STYLE_LABELS[view.styleLabel]} style
+                {BATTLE_STYLE_LABELS[view.styleLabel]} style
               </p>
               <p className="mt-0.5 text-xs text-muted-foreground">
                 Primary {marketTicker(view.primaryMarket)}

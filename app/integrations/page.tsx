@@ -12,55 +12,8 @@ import type { Metadata } from "next";
 import Link from "next/link";
 import { AlertTriangle, Plug, ShieldCheck } from "lucide-react";
 import { Badge } from "@/components/ui/badge";
-import {
-  ProviderCard,
-  type PlannedProvider,
-} from "@/components/integrations/provider-card";
 
 export const metadata: Metadata = { title: "Integrations" };
-
-const PROVIDERS: PlannedProvider[] = [
-  {
-    name: "NinjaTrader",
-    phase: "Phase 1 — desktop add-on",
-    status: "Planned — design only",
-    connection: "Local desktop add-on, signed events (CSV fallback)",
-    data: "Executions, orders, position changes, account snapshots",
-    verification: "CLIENT_VERIFIED",
-  },
-  {
-    name: "Tradovate",
-    phase: "Phase 2 — direct integration",
-    status: "Planned — subject to API availability",
-    connection: "Server-to-server OAuth-style grant",
-    data: "Historical executions, account snapshots, live stream where supported",
-    verification: "PROVIDER_VERIFIED",
-  },
-  {
-    name: "Rithmic",
-    phase: "Phase 3 — additional providers",
-    status: "Planned — subject to commercial + technical approval",
-    connection: "Provider-level adapter",
-    data: "Executions and account state via the same adapter pattern",
-    verification: "PROVIDER_VERIFIED",
-  },
-  {
-    name: "CQG · ProjectX · other systems",
-    phase: "Phase 3 — additional providers",
-    status: "Planned — additive enum entries",
-    connection: "One new provider folder per system",
-    data: "Broker / prop-firm executions via the shared adapter pattern",
-    verification: "PROVIDER_VERIFIED",
-  },
-  {
-    name: "Partner infrastructure",
-    phase: "Phase 4 — once multiple live providers exist",
-    status: "Planned — not started",
-    connection: "Firm dashboards, webhooks, enterprise APIs on the same repositories",
-    data: "Team standings, roster activity, battle-result feeds",
-    verification: "PROVIDER_VERIFIED",
-  },
-];
 
 const SEAMS = [
   {
@@ -142,21 +95,6 @@ export default function IntegrationsPage() {
               implementation and no API access.
             </p>
           </div>
-        </div>
-      </section>
-
-      {/* Planned provider matrix */}
-      <section>
-        <SectionHeading icon={Plug}>Planned provider roadmap</SectionHeading>
-        <p className="mb-4 max-w-3xl text-xs text-muted-foreground">
-          Each provider below is planned and not yet connected. The verification
-          state shown is what live data <em>would</em> arrive as once the
-          integration is built — not a status it holds today.
-        </p>
-        <div className="grid gap-3 md:grid-cols-2 lg:grid-cols-3">
-          {PROVIDERS.map((p) => (
-            <ProviderCard key={p.name} provider={p} />
-          ))}
         </div>
       </section>
 

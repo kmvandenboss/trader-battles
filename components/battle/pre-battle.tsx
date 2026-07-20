@@ -41,7 +41,7 @@ function MatchupSide({
       <div>
         <p className="text-lg font-semibold">{participant.displayName}</p>
         <p className="text-xs text-muted-foreground">
-          {participant.firmName} · {participant.accountLabel}
+          {participant.accountLabel}
         </p>
         <p className="text-xs text-muted-foreground tabular-nums">
           Rating {participant.rating.toLocaleString("en-US")}

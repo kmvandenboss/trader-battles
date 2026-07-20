@@ -22,8 +22,7 @@ export interface MatchmakingTraderCard {
   rating: number;
   league: League;
   division: Division;
-  firmName: string;
-  /** Simulated account plan label from the seed dataset (e.g. "MFFU 50K Rapid"). */
+  /** Simulated account plan label from the seed dataset (e.g. "50K Rapid"). */
   accountLabel: string | null;
   battleStyle: BattleStyle;
   primaryMarket: Market;

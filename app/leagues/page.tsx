@@ -7,8 +7,6 @@
  */
 
 import type { Metadata } from "next";
-import Link from "next/link";
-import { Building2 } from "lucide-react";
 import { Badge } from "@/components/ui/badge";
 import { getRepositories } from "@/lib/data/repositories";
 import { LEAGUES, type League } from "@/lib/data/schema";
@@ -18,11 +16,7 @@ import {
   leagueForRating,
 } from "@/lib/data/leagues";
 import { LeagueBadge } from "@/components/battle/league-badge";
-import {
-  FIRM_KIND_LABELS,
-  LEAGUE_LABELS,
-  formatLeague,
-} from "@/components/battle/format";
+import { LEAGUE_LABELS, formatLeague } from "@/components/battle/format";
 import { cn } from "@/lib/utils";
 
 export const metadata: Metadata = {
@@ -45,7 +39,7 @@ function bandLabel(
 }
 
 export default async function LeaguesPage() {
-  const { traders, firms } = getRepositories();
+  const { traders } = getRepositories();
   const demoTrader = await traders.getDemoTrader();
   const rating = demoTrader.profile.rating;
   const placement = leagueForRating(rating);
@@ -69,8 +63,6 @@ export default async function LeaguesPage() {
       : null;
   const pointsAboveDemotion =
     placement.demotionRating !== null ? rating - placement.demotionRating : null;
-
-  const firmStandings = await firms.list();
 
   // Ladder rendered highest league at the top.
   const ladder = [...LEAGUES].reverse();
@@ -208,41 +200,6 @@ export default async function LeaguesPage() {
             </div>
           );
         })}
-      </section>
-
-      {/* Firms overview */}
-      <section>
-        <div className="mb-3 flex items-center gap-2">
-          <Building2 className="size-4 text-muted-foreground" aria-hidden />
-          <h2 className="text-sm font-semibold">Firms & affiliations</h2>
-          <Badge variant="outline" className="text-[10px] text-muted-foreground">
-            Demo — no real partnership
-          </Badge>
-        </div>
-        <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-3">
-          {firmStandings.map((f) => (
-            <Link
-              key={f.firm.id}
-              href={`/firms/${f.firm.slug}`}
-              className="rounded-xl border border-border bg-card p-4 transition-colors hover:border-primary/40 hover:bg-secondary/30"
-            >
-              <div className="flex items-center justify-between">
-                <p className="text-sm font-semibold">{f.firm.name}</p>
-                <span className="rounded-sm border border-border/60 px-1 py-px text-[10px] tracking-wide text-muted-foreground uppercase">
-                  {FIRM_KIND_LABELS[f.firm.kind]}
-                </span>
-              </div>
-              <div className="mt-2 flex items-center gap-3 text-[11px] text-muted-foreground">
-                <span className="tabular-nums">
-                  {f.activeTraders} trader{f.activeTraders === 1 ? "" : "s"}
-                </span>
-                <span className="tabular-nums">
-                  avg {f.averageRating.toLocaleString("en-US")}
-                </span>
-              </div>
-            </Link>
-          ))}
-        </div>
       </section>
     </div>
   );

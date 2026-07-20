@@ -10,15 +10,9 @@ import type {
   BattleType,
   BattleWindow,
   Division,
-  FirmKind,
   League,
   Market,
 } from "@/lib/data/schema";
-
-export const FIRM_KIND_LABELS: Record<FirmKind, string> = {
-  PROP_FIRM: "Prop firm",
-  AFFILIATION: "Affiliation",
-};
 
 export const BATTLE_WINDOW_LABELS: Record<BattleWindow, string> = {
   OPENING_BELL: "Opening Bell · 9:30–11:00 ET",

@@ -36,7 +36,7 @@ describe("TraderRepository", () => {
     expect(history.at(-1)?.newRating).toBe(1684);
     const accounts = await repos.traders.getAccounts(demo.user.id);
     expect(accounts).toHaveLength(1);
-    expect(accounts[0].metadata.planName).toBe("MFFU 50K Rapid");
+    expect(accounts[0].metadata.planName).toBe("50K Rapid");
   });
 });
 

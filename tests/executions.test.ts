@@ -39,7 +39,7 @@ function rawFill(overrides: Partial<RawExecutionRecord> = {}): RawExecutionRecor
   return {
     providerEventId: overrides.providerEventId ?? "evt-1",
     sourceProvider: "mock",
-    accountId: "MFFU-50K-84127",
+    accountId: "SIM-50K-84127",
     instrument: "NQU6",
     side: "BUY",
     quantity: 1,

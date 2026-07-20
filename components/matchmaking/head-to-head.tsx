@@ -56,8 +56,7 @@ function TraderColumn({
       <div>
         <p className="text-lg font-semibold">{trader.displayName}</p>
         <p className="text-xs text-muted-foreground">
-          {trader.firmName}
-          {trader.accountLabel ? ` · ${trader.accountLabel}` : ""}
+          {trader.accountLabel ?? "Simulated Account"}
         </p>
       </div>
       <div

@@ -38,7 +38,6 @@ import type { TraderAccent } from "./trader-avatar";
 export interface ParticipantView {
   userId: string;
   displayName: string;
-  firmName: string;
   league: League;
   division: Division;
   accent: TraderAccent;
@@ -131,7 +130,6 @@ function toParticipantView(
   return {
     userId: summary.trader.user.id,
     displayName: summary.trader.user.displayName,
-    firmName: summary.trader.firm.name,
     league: summary.trader.profile.league,
     division: summary.trader.profile.division,
     accent: which,

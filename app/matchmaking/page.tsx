@@ -43,7 +43,6 @@ async function buildTraderCard(
     rating: trader.profile.rating,
     league: trader.profile.league,
     division: trader.profile.division,
-    firmName: trader.firm.name,
     accountLabel: accounts[0]?.metadata.planName ?? null,
     battleStyle: trader.profile.battleStyle,
     primaryMarket: trader.profile.primaryMarket,

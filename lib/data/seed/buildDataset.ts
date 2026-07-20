@@ -182,23 +182,23 @@ export function buildSeedDataset(): SeedDataset {
   // --- Trading accounts + integration connections ----------------------------
   const PLANS: Record<string, Array<{ name: string; balance: number }>> = {
     mffu: [
-      { name: "MFFU 50K Rapid", balance: 50_000 },
-      { name: "MFFU 100K Standard", balance: 100_000 },
+      { name: "50K Rapid", balance: 50_000 },
+      { name: "50K Rapid", balance: 100_000 },
     ],
     tradeify: [
-      { name: "Tradeify 50K Advanced", balance: 50_000 },
-      { name: "Tradeify 100K Growth", balance: 100_000 },
+      { name: "50K Rapid", balance: 50_000 },
+      { name: "50K Rapid", balance: 100_000 },
     ],
     apex: [
-      { name: "Apex 50K Full", balance: 50_000 },
-      { name: "Apex 150K Full", balance: 150_000 },
+      { name: "50K Rapid", balance: 50_000 },
+      { name: "50K Rapid", balance: 150_000 },
     ],
     topstep: [
-      { name: "Topstep 50K Combine", balance: 50_000 },
-      { name: "Topstep 100K Combine", balance: 100_000 },
+      { name: "50K Rapid", balance: 50_000 },
+      { name: "50K Rapid", balance: 100_000 },
     ],
-    independent: [{ name: "Self-Funded Futures", balance: 75_000 }],
-    brokerage: [{ name: "Retail Brokerage Futures", balance: 60_000 }],
+    independent: [{ name: "50K Rapid", balance: 75_000 }],
+    brokerage: [{ name: "50K Rapid", balance: 60_000 }],
   };
 
   const tradingAccounts: TradingAccount[] = ROSTER.map((entry) => {
@@ -237,7 +237,7 @@ export function buildSeedDataset(): SeedDataset {
   // Authored overrides for the demo pair (spec + showcase battle math).
   const kevinAccount = tradingAccounts.find((a) => a.id === "acct-kevinv")!;
   Object.assign(kevinAccount, {
-    externalAccountId: "MFFU-50K-84127",
+    externalAccountId: "SIM-50K-84127",
     accountType: "PROP_FUNDED",
     propFirm: "MFFU",
     startingBalance: 50_000,
@@ -245,14 +245,14 @@ export function buildSeedDataset(): SeedDataset {
     maximumContracts: 5,
     dailyLossLimit: 1250,
     metadata: {
-      planName: "MFFU 50K Rapid",
+      planName: "50K Rapid",
       dailyDrawdownRemaining: 980,
       note: "Simulated demo account",
     },
   } satisfies Partial<TradingAccount>);
   const deltaAccount = tradingAccounts.find((a) => a.id === "acct-deltahunter")!;
   Object.assign(deltaAccount, {
-    externalAccountId: "TRADEIFY-50K-31552",
+    externalAccountId: "SIM-50K-31552",
     accountType: "PROP_FUNDED",
     propFirm: "Tradeify",
     startingBalance: 50_000,
@@ -260,7 +260,7 @@ export function buildSeedDataset(): SeedDataset {
     maximumContracts: 6,
     dailyLossLimit: 1500,
     metadata: {
-      planName: "Tradeify 50K Advanced",
+      planName: "50K Rapid",
       dailyDrawdownRemaining: 610,
       note: "Simulated demo account",
     },

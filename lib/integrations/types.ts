@@ -40,7 +40,7 @@ export type UnsubscribeFunction = () => void;
  */
 export interface ConnectAccountInput {
   userId: string;
-  /** Provider-native account identifier (e.g. "MFFU-50K-84127"). */
+  /** Provider-native account identifier (e.g. "SIM-50K-84127"). */
   externalAccountId: string;
   /** Opaque reference to credentials in a secrets store. Unused by mock. */
   credentialRef?: string;

@@ -91,9 +91,9 @@ describe("demo user KevinV (locked spec)", () => {
     expect(total).toBe(96);
   });
 
-  it("has the MFFU 50K Rapid account, connected", () => {
+  it("has the 50K Rapid account, connected", () => {
     const account = dataset.tradingAccounts.find((a) => a.userId === kevinId)!;
-    expect(account.metadata.planName).toBe("MFFU 50K Rapid");
+    expect(account.metadata.planName).toBe("50K Rapid");
     expect(account.propFirm).toBe("MFFU");
     expect(account.connectionStatus).toBe("CONNECTED");
     expect(account.startingBalance).toBe(50_000);

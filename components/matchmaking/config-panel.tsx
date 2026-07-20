@@ -207,7 +207,7 @@ export function ConfigPanel({
                 {demo.displayName}
               </p>
               <p className="text-xs text-muted-foreground">
-                {demo.firmName} · {formatLeague(demo.league, demo.division)}
+                {formatLeague(demo.league, demo.division)}
               </p>
             </div>
             <LeagueBadge
@@ -250,7 +250,7 @@ export function ConfigPanel({
             </span>
           </div>
           <p className="mt-1.5 text-[11px] text-muted-foreground">
-            Demo prop-firm plan — no real firm partnership implied.
+            Simulated demo account — not connected to any real account.
           </p>
           <div className="mt-3 grid grid-cols-2 gap-2">
             <StatPill

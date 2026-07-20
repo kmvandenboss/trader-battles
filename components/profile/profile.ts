@@ -51,8 +51,6 @@ export interface ProfileViewModel {
   league: League;
   division: Division;
   rating: number;
-  firmName: string;
-  firmSlug: string;
   styleLabel: BattleStyle;
   primaryMarket: Market;
   secondaryMarkets: Market[];
@@ -119,8 +117,6 @@ async function buildProfile(userId: string): Promise<ProfileViewModel | null> {
     league: profile.league,
     division: profile.division,
     rating: profile.rating,
-    firmName: trader.firm.name,
-    firmSlug: trader.firm.slug,
     styleLabel: profile.battleStyle,
     primaryMarket: profile.primaryMarket,
     secondaryMarkets: profile.secondaryMarkets,
