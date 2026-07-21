@@ -163,3 +163,63 @@ export function resolveScoringConfig(
     consistency: overrides.consistency ?? DEFAULT_SCORING_CONFIG.consistency,
   };
 }
+
+// ---------------------------------------------------------------------------
+// Scoring modes (MFFU v1) — a battle selects one of these; the engines are
+// independent. `PNL_V1` is the straight-PnL model used for real settled
+// battles (see docs/v1-divergences.md → Scoring); `NORMALIZED_4F` is the
+// retained demo model above. Do NOT delete either.
+// ---------------------------------------------------------------------------
+
+export const SCORING_MODES = ["PNL_V1", "NORMALIZED_4F"] as const;
+export type ScoringMode = (typeof SCORING_MODES)[number];
+
+/**
+ * The mode real v1 battles use by default. The seeded demo showcase may still
+ * request `NORMALIZED_4F` explicitly; nothing about the 4-factor engine or
+ * its defaults changes.
+ */
+export const DEFAULT_SCORING_MODE: ScoringMode = "PNL_V1";
+
+/** Tuning for the `PNL_V1` participation bonus. All values live here — the
+ * math in `calculatePnlBattleScore.ts` never hard-codes them. */
+export interface PnlScoringConfig {
+  /** Bonus points awarded per closed round-trip trade. */
+  pointsPerTrade: number;
+  /**
+   * Number of closed trades that earn the bonus; the cap is
+   * `pointsPerTrade * maxTrades` (defaults: 5 × 3 = +15). Keep the cap below
+   * a typical single trade's PnL so the bonus only swings near-ties, never a
+   * decisive battle — patience still wins, only the total no-show loses.
+   */
+  maxTrades: number;
+}
+
+export const DEFAULT_PNL_SCORING_CONFIG: PnlScoringConfig = {
+  pointsPerTrade: 5,
+  maxTrades: 3,
+};
+
+/** Merge a per-call override onto the PNL_V1 defaults (field-level; the
+ * config is flat). Rejects negative or non-finite values. */
+export function resolvePnlScoringConfig(
+  overrides?: Partial<PnlScoringConfig>,
+): PnlScoringConfig {
+  const resolved: PnlScoringConfig = {
+    pointsPerTrade:
+      overrides?.pointsPerTrade ?? DEFAULT_PNL_SCORING_CONFIG.pointsPerTrade,
+    maxTrades: overrides?.maxTrades ?? DEFAULT_PNL_SCORING_CONFIG.maxTrades,
+  };
+  if (
+    !Number.isFinite(resolved.pointsPerTrade) ||
+    resolved.pointsPerTrade < 0 ||
+    !Number.isInteger(resolved.maxTrades) ||
+    resolved.maxTrades < 0
+  ) {
+    throw new Error(
+      "Scoring config error: PNL_V1 bonus values must be non-negative " +
+        "(pointsPerTrade finite, maxTrades an integer)",
+    );
+  }
+  return resolved;
+}

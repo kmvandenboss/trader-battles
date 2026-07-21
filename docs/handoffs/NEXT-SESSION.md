@@ -41,7 +41,13 @@ no infra), stand up B+C, then D ties it together.
 
 ---
 
-### Phase A — V1 scoring mode (owner: `scoring-engine` agent)
+### Phase A — V1 scoring mode (owner: `scoring-engine` agent) — ✅ DONE
+
+Shipped as specced (see STATE.md "Phase A decisions" for the API + the decisions made): pure
+`lib/scoring/calculatePnlBattleScore.ts` + `resolveBattleWinner`, `PnlScoringConfig` + `ScoringMode`
+in config, 26 tests (167 total), QA pass with no blockers, 4-factor engine untouched. Phase D
+notes: persist gross profit/loss rather than a possibly-`Infinity` profitFactor; `settleBattle.ts`
+consumes the `ScoringMode` selector (nothing dispatches on it yet).
 
 Additive to the existing scoring engine. **Do not modify** the 4-factor component math.
 

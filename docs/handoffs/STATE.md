@@ -21,6 +21,10 @@ keep the 4-factor engine), Neon Postgres behind the repo interface, bridge auth 
 CSV import → settle-after-the-fact battle scoring. Phases: A scoring → B Postgres → C auth →
 D CSV import + settlement (A first; B/C parallel; D depends on all).
 
+**Phase A (v1 scoring mode) is DONE and committed** — see "Phase A decisions" below. Next up:
+**Phase B (Neon Postgres) and Phase C (bridge auth)**, which are independent and can run in
+parallel; then D.
+
 **Demo baseline (unchanged, still green):** Phase 11 DONE. Gates: `npm run lint`, `npm run build`
 (14 routes; `/scoring` + `/integrations` `○ Static`), `npm test` **142/142**, `npm run battle`
 (KevinV winner), prod-server smoke. The two low-value backlog items below remain deferred.
@@ -56,7 +60,8 @@ deliberate keep — the dashboard CTA is the primary entry). Everything else is 
 | 6 — Dashboard, result, review | ✅ done | `5554768` |
 | 7 — Leaderboards, profiles, leagues, history | ✅ done | `4cc0e3c` |
 | 8 — Docs + full QA | ✅ done | `64dbfa1` |
-| 11 — Polish (backlog above) | ✅ done | _this commit_ |
+| 11 — Polish (backlog above) | ✅ done | `e0e8479` |
+| **v1 A — `PNL_V1` scoring mode** | ✅ done | _this commit_ |
 
 ## Decisions made so far (beyond CLAUDE.md's locked ones)
 
@@ -354,6 +359,44 @@ deliberate keep — the dashboard CTA is the primary entry). Everything else is 
   test passes). Gates: lint, build (14 routes, both new pages `○ Static`), 142/142 tests,
   headless battle (KevinV winner). 1 informational LOW: `/scoring` shows the honest 83.55/74.00
   (not the brief's published 83.9/73.6) — intentional, documented in `docs/scoring.md`. No fixes.
+
+### Phase A decisions (v1 `PNL_V1` scoring mode) — scoring-engine agent, QA'd, no blockers
+
+- **New pure module `lib/scoring/calculatePnlBattleScore.ts`** (file header names Phase D
+  `lib/battles/settleBattle.ts` as the intended caller):
+  `calculatePnlBattleScore(input: PnlBattleInput, config?: Partial<PnlScoringConfig>)` →
+  `{ score, realizedPnl, participationBonus, closedTradeCount, tiebreakers, markOut }`.
+  Score = realized PnL ($1 = 1 pt) + bonus (`pointsPerTrade * min(closedTrades, maxTrades)`).
+  Tiebreakers: `{ profitFactor, winningTradeCount, tookTrade, firstGreenAtMs }`.
+  `resolveBattleWinner(a, b)` → `{ outcome: "A"|"B"|"TIE", decidedBy: TiebreakerTier, detail }`.
+- **Config additions (`lib/scoring/config.ts`, purely additive)**: `ScoringMode =
+  "PNL_V1" | "NORMALIZED_4F"`, `DEFAULT_SCORING_MODE = "PNL_V1"`, `PnlScoringConfig`
+  `{ pointsPerTrade: 5, maxTrades: 3 }` (cap +15), `resolvePnlScoringConfig(overrides?)` with
+  validation (`maxTrades` must be a non-negative integer; fractional `pointsPerTrade` allowed as a
+  tuning knob). **The 4-factor engine + its config are byte-identical — untouched per CLAUDE.md.**
+- **Cascade order**: `SCORE` → `REALIZED_PNL` (realized + mark-out, i.e. score minus bonus) →
+  `PROFIT_FACTOR` → `WINNING_TRADES` → `TOOK_TRADE` → `FIRST_GREEN` → explicit `DEAD_TIE`.
+  The extra `REALIZED_PNL` tier reconciles "cascade starts at PnL" with "tiebreakers don't touch
+  the headline number": a $10/1-trade (15 pts) beats $0/3-trades (15 pts). Comparisons use a 1e-9
+  epsilon (float noise only — can't false-tie cents or epoch-ms). `Infinity === Infinity` profit
+  factors short-circuit to the next tier safely.
+- **Mark-out semantics (per v1-divergences)**: open position at window close with a provided
+  `markPrice` → `markOut.status = "MARKED"`, signed PnL from `markPrice` + `pointValue` (short sign
+  verified), included in `score` and the `REALIZED_PNL` tier but NOT in `realizedPnl`, the bonus,
+  or per-trade tiebreakers; no mark price → `"EXCLUDED_NO_MARK"`, PnL 0, human-readable `note`.
+- **`accountBracket` is an informational `string`** (e.g. "50K") — bracket matching happens
+  upstream; Phase D's schema owns any bracket enum. **Dead ties return `outcome: "TIE"`** — rating
+  treatment of draws is the settlement/rating caller's decision.
+- **Tests**: `tests/pnlScoring.test.ts` (26) — bonus cap, −$3-beats-flat-0, PnL-gap-dominates-bonus,
+  both-flat cascade/dead-tie, mark-out (long + short + excluded), every cascade tier, config
+  validation, symmetry. **Total tests: 167** (all prior 141 + 26 new; 4F worked examples unchanged).
+- **QA verdict (`qa-reviewer`): PASS, no blockers.** 2 minors fixed pre-commit (integer guard on
+  `maxTrades`; `round2` on `participationBonus`). **Notes deliberately left for Phase D**:
+  (1) `tiebreakers.profitFactor` can be `Infinity` — `JSON.stringify` turns it into `null`, so
+  settlement persistence must store gross profit/loss (or a sentinel) instead of the raw number;
+  (2) `ScoringMode` is declarative only — nothing dispatches on it yet; `settleBattle.ts` is where
+  the mode gets consumed; (3) minor double-rounding (`realizedPnl` rounded before `score` sums it)
+  — irrelevant for cent-denominated imports.
 
 ## Known state / gotchas
 
