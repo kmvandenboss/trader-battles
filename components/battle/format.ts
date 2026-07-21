@@ -92,6 +92,36 @@ export function formatSignedUsd(value: number): string {
   return `${rounded > 0 ? "+" : "-"}${formatUsd(rounded)}`;
 }
 
+/** "$1,013.25" — exact dollars (cents only when present). Unsigned magnitude.
+ * Settled PNL_V1 values keep their cents; never rounded away. */
+export function formatUsdExact(value: number): string {
+  const abs = Math.abs(value);
+  return `$${abs.toLocaleString("en-US", {
+    minimumFractionDigits: 0,
+    maximumFractionDigits: 2,
+  })}`;
+}
+
+/** "+$1,013.25" / "-$3.50" / "$0" — signed exact dollars. */
+export function formatSignedUsdExact(value: number): string {
+  if (value === 0) return "$0";
+  return `${value > 0 ? "+" : "-"}${formatUsdExact(value)}`;
+}
+
+/** "142.5 pts" / "-3.5 pts" — an already-computed PNL_V1 headline score. */
+export function formatPoints(value: number): string {
+  const abs = Math.abs(value).toLocaleString("en-US", {
+    minimumFractionDigits: 0,
+    maximumFractionDigits: 2,
+  });
+  return `${value < 0 ? "-" : ""}${abs} pts`;
+}
+
+/** "13:30–15:00 UTC · 2026-07-22" from ISO window bounds (string ops only). */
+export function formatUtcWindow(startIso: string, endIso: string): string {
+  return `${startIso.slice(11, 16)}–${endIso.slice(11, 16)} UTC · ${startIso.slice(0, 10)}`;
+}
+
 /** Battle-clock countdown, e.g. "87:12" (minutes:seconds). */
 export function formatCountdown(ms: number): string {
   const totalSeconds = Math.max(0, Math.ceil(ms / 1000));

@@ -458,11 +458,18 @@ export function buildSeedDataset(): SeedDataset {
       market: plan.market,
       status: "COMPLETED",
       scheduledStart,
+      // v1-only column: seeded demo battles keep null (window implied by
+      // battleWindow + endTime). Same for bracket + settlement resolution.
+      scheduledEnd: null,
       actualStart: scheduledStart,
       endTime,
       battleWindow: plan.window,
       scoringConfigurationId: SCORING_CONFIGURATION_ID,
+      scoringMode: "NORMALIZED_4F",
+      accountBracket: null,
       winnerId: userIdFor(winner.id),
+      decidedBy: null,
+      resolutionDetail: null,
       verificationStatus: "SIMULATED",
       createdAt: addMinutes(scheduledStart, -12),
     });
@@ -537,6 +544,18 @@ export function buildSeedDataset(): SeedDataset {
 
     const winnerParticipantId = `bp-${battleId}-${winner.id}`;
     const loserParticipantId = `bp-${battleId}-${loser.id}`;
+    // The PNL_V1 settlement columns (realizedPnl...markOutNote) are null on
+    // every seeded row: the demo's battles are NORMALIZED_4F.
+    const pnlV1Nulls = {
+      realizedPnl: null,
+      participationBonus: null,
+      closedTradeCount: null,
+      grossProfit: null,
+      grossLoss: null,
+      markOutPnl: null,
+      markOutStatus: null,
+      markOutNote: null,
+    } as const;
     battleParticipants.push(
       {
         id: winnerParticipantId,
@@ -548,6 +567,7 @@ export function buildSeedDataset(): SeedDataset {
         finalScore: winnerScores.total,
         result: "WIN",
         verificationStatus: "SIMULATED",
+        ...pnlV1Nulls,
       },
       {
         id: loserParticipantId,
@@ -559,6 +579,7 @@ export function buildSeedDataset(): SeedDataset {
         finalScore: loserScores.total,
         result: "LOSS",
         verificationStatus: "SIMULATED",
+        ...pnlV1Nulls,
       },
     );
 

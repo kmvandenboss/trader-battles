@@ -1,9 +1,9 @@
 # Integrity and verification
 
-How Trader Battles labels simulated data today, which integrity mechanics the demo already implements,
-and how a production version with live integrations would handle the rest. The demo does not need
-production-grade enforcement — but the structure acknowledges every issue below, and several defenses
-are already real code.
+How Trader Battles labels data by its true source, which integrity mechanics the code already
+implements, and how a production version with live integrations would handle the rest. This build
+does not need production-grade enforcement — but the structure acknowledges every issue below, and
+several defenses are already real code.
 
 ## Verification states
 
@@ -12,16 +12,20 @@ Every account, execution event, battle participant, and snapshot carries a `veri
 
 | State | Meaning |
 |---|---|
-| `SIMULATED` | Generated demo data. **Every row in this demo is `SIMULATED` — no exceptions.** |
-| `SELF_REPORTED` | User-supplied (e.g. a CSV import) with no independent attestation |
+| `SIMULATED` | Generated demo data. **Every seeded/demo row is `SIMULATED` — no exceptions.** |
+| `SELF_REPORTED` | User-supplied with no independent attestation. **The state of every v1 CSV import** — trades, the accounts created for them, and settled v1 battles. |
 | `CLIENT_VERIFIED` | Attested by client-side software (e.g. a desktop add-on) signing what it observed |
 | `PROVIDER_VERIFIED` | Confirmed server-to-server with the provider — the future target state for live data |
 | `MANUALLY_REVIEWED` | Examined and confirmed by a human reviewer |
 | `DISPUTED` | Under dispute; excluded from authoritative results until resolved |
 
-The demo never uses `PROVIDER_VERIFIED`; the other states exist now so live integrations plug in
-without schema changes. The seed validator (`npm run seed`) fails if any demo row is labeled anything
-other than `SIMULATED`.
+Nothing today uses `PROVIDER_VERIFIED`; the remaining states exist now so live integrations plug in
+without schema changes. The seed validator (`npm run seed`) fails if any demo row is labeled
+anything other than `SIMULATED`. In the other direction, the CSV normalizer defaults provider
+`csv` to `SELF_REPORTED` (`PROVIDER_DEFAULT_VERIFICATION` in `lib/executions/normalizeExecution.ts`)
+and settlement persists `SELF_REPORTED` — imported trades are **never** labeled `SIMULATED` or
+"Demo Verified", and never claimed broker-verified. The v1 UI renders them as
+"Self-reported (CSV import)" (`components/battle-v1/labels.ts`).
 
 ## Labeling policy
 
@@ -33,8 +37,12 @@ other than `SIMULATED`.
 - Demo activity is never presented as genuinely provider-verified trading, and skill indicators
   (discipline/risk/performance) are framed as competitive execution quality, never as returns or a
   promise of profitability.
+- **Real imported data is labeled honestly too**: v1 battle pages chip imported trades and settled
+  results as "Self-reported (CSV import)", and mark-out figures carry the note that the buzzer
+  close-out is hypothetical ("battle PnL may differ from account PnL"). Real data is never dressed
+  up as demo data, and demo data is never dressed up as real.
 
-## What the demo already implements
+## What the code already implements
 
 **Server-side authoritative scoring.** All scoring lives in `lib/scoring/*` and rating in
 `lib/ratings/*` as pure, isolated functions; the battle engine is their only caller and UI components
@@ -63,6 +71,28 @@ for the dataset, and each scenario has its own PRNG seed. The same scenario repl
 run — `npm run seed` verifies byte-identical rebuilds, and there is no unseeded `Math.random()` in
 domain, scoring, or pipeline code. Determinism is an integrity property: any result can be reproduced
 and inspected.
+
+**Integrity checks on CSV import (v1).** Every trade row is checked *before* any record is emitted
+(`lib/integrations/providers/csv/parseTradeCsv.ts`): the instrument must be supported, the prices
+must recompute to the stated `market_profit` (±0.01 points), and points × point value × contracts −
+fees must recompute to the stated `net_profit` (±$0.05). Failing rows are rejected with a line
+number and a reason carrying the actual numbers — wrong multipliers and timezone/format drift fail
+loudly instead of quietly mis-scoring. A file with a bad header or spanning multiple trading
+accounts is rejected whole. Details in [csv-import.md](csv-import.md).
+
+**Idempotent re-import and re-settlement (v1).** CSV fill event ids are deterministic functions of
+row content, so re-importing the same (or an overlapping) file dedupes to zero new events — at the
+pipeline and again at persistence (`saveImportedExecutions` skips stored
+`(sourceProvider, providerEventId, tradingAccountId)` keys). Settlement replays *persisted* events
+through the same pipeline, keys ratings off the scheduling-time starting ratings, and
+`saveSettlement` replaces prior settlement rows and reverses the prior win/loss contribution before
+applying the new one — running settlement twice yields identical state.
+
+**Honest mark-out and window accounting (v1).** Settlement counts only trades entered *and* exited
+inside the battle window; a position open at the buzzer is marked out at a bar close no older than
+5 minutes, or — when no fresh mark exists — **excluded from the score and noted**
+(`EXCLUDED_NO_MARK`), never guessed. Every excluded trade and unmarked exposure is itemized with a
+reason in the settlement report, and mark-out PnL is always labeled hypothetical.
 
 ## How a production version would handle the rest
 

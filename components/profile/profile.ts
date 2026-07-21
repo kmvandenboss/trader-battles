@@ -35,7 +35,8 @@ export interface ProfileBattleRow {
   battleId: string;
   iso: string;
   dateLabel: string;
-  market: Market;
+  /** Null = open instrument choice (v1 battles). Seeded battles set it. */
+  market: Market | null;
   result: BattleResult;
   selfScore: number;
   opponentScore: number;

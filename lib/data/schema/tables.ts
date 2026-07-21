@@ -25,6 +25,7 @@ import {
   pgTable,
   text,
   timestamp,
+  uniqueIndex,
 } from "drizzle-orm/pg-core";
 
 import {
@@ -36,6 +37,7 @@ import {
   BATTLE_STYLES,
   BATTLE_TYPES,
   BATTLE_WINDOWS,
+  CHALLENGE_STATUSES,
   CONNECTION_STATUSES,
   CONNECTION_TYPES,
   DIVISIONS,
@@ -46,6 +48,7 @@ import {
   MARKETS,
   NOTIFICATION_TYPES,
   ORDER_SIDES,
+  SCORING_MODES,
   VERIFICATION_STATUSES,
   type Market,
 } from "./enums";
@@ -92,6 +95,12 @@ export const notificationTypeEnum = pgEnum(
   "notification_type",
   NOTIFICATION_TYPES,
 );
+export const challengeStatusEnum = pgEnum(
+  "challenge_status",
+  CHALLENGE_STATUSES,
+);
+/** Kept in lockstep with lib/scoring/config.ts — see enums.ts SCORING_MODES. */
+export const scoringModeEnum = pgEnum("scoring_mode", SCORING_MODES);
 
 // ---------------------------------------------------------------------------
 // Core identity
@@ -228,12 +237,26 @@ export const integrationConnections = pgTable("integration_connections", {
 export const battles = pgTable("battles", {
   id: text("id").primaryKey(),
   battleType: battleTypeEnum("battle_type").notNull(),
-  market: marketEnum("market").notNull(),
+  /**
+   * NULLABLE since v1: instrument choice is open to each trader, so a v1
+   * battle does not pin one product (null = open choice). Seeded demo
+   * battles always carry a market.
+   */
+  market: marketEnum("market"),
   status: battleStatusEnum("status").notNull(),
   scheduledStart: timestamp("scheduled_start", {
     withTimezone: true,
     mode: "string",
   }).notNull(),
+  /**
+   * End of the v1 battle window [scheduledStart, scheduledEnd]. Settlement
+   * scores only trades inside this window. Null on seeded demo battles
+   * (their duration is implied by battleWindow + endTime).
+   */
+  scheduledEnd: timestamp("scheduled_end", {
+    withTimezone: true,
+    mode: "string",
+  }),
   actualStart: timestamp("actual_start", {
     withTimezone: true,
     mode: "string",
@@ -241,7 +264,23 @@ export const battles = pgTable("battles", {
   endTime: timestamp("end_time", { withTimezone: true, mode: "string" }),
   battleWindow: battleWindowEnum("battle_window").notNull(),
   scoringConfigurationId: text("scoring_configuration_id").notNull(),
+  /**
+   * Which scoring engine settles this battle. Seeded demo battles are
+   * NORMALIZED_4F (the retained 4-factor mode); v1 battles are PNL_V1.
+   */
+  scoringMode: scoringModeEnum("scoring_mode")
+    .notNull()
+    .default("NORMALIZED_4F"),
+  /**
+   * Account-size bracket label (e.g. "50K"). Informational — matching by
+   * bracket happens at challenge/matchmaking time, not here.
+   */
+  accountBracket: text("account_bracket"),
   winnerId: text("winner_id").references(() => users.id),
+  /** Tiebreaker-cascade outcome, e.g. "REALIZED_PNL" or "PROFIT_FACTOR". */
+  decidedBy: text("decided_by"),
+  /** Human-readable settlement resolution detail (cascade explanation). */
+  resolutionDetail: text("resolution_detail"),
   verificationStatus: verificationStatusEnum("verification_status").notNull(),
   createdAt: timestamp("created_at", {
     withTimezone: true,
@@ -249,6 +288,12 @@ export const battles = pgTable("battles", {
   }).notNull(),
 });
 
+/**
+ * One row per (battle, trader). Since v1, participant rows are created when
+ * a battle is SCHEDULED — before any import or settlement exists — so the
+ * account link and every outcome column are NULLABLE and filled by
+ * settlement (BattleRepository.saveSettlement).
+ */
 export const battleParticipants = pgTable("battle_participants", {
   id: text("id").primaryKey(),
   battleId: text("battle_id")
@@ -257,16 +302,116 @@ export const battleParticipants = pgTable("battle_participants", {
   userId: text("user_id")
     .notNull()
     .references(() => users.id),
-  tradingAccountId: text("trading_account_id")
-    .notNull()
-    .references(() => tradingAccounts.id),
+  /** Null until the trader's account is known (v1: at import time). */
+  tradingAccountId: text("trading_account_id").references(
+    () => tradingAccounts.id,
+  ),
   startingRating: integer("starting_rating").notNull(),
-  endingRating: integer("ending_rating").notNull(),
-  /** Authoritative 0-100 battle score (computed server-side, never in UI). */
-  finalScore: doublePrecision("final_score").notNull(),
-  result: battleResultEnum("result").notNull(),
+  /** Null until settled. */
+  endingRating: integer("ending_rating"),
+  /**
+   * Authoritative battle score (computed server-side, never in UI). Null
+   * until settled. For NORMALIZED_4F battles this is the 0-100 composite;
+   * for PNL_V1 battles it is the headline points value (mark-out realized
+   * PnL dollars + participation bonus) and can be negative or large.
+   */
+  finalScore: doublePrecision("final_score"),
+  /** Null until settled. */
+  result: battleResultEnum("result"),
   verificationStatus: verificationStatusEnum("verification_status").notNull(),
+  // --- PNL_V1 settlement detail (all null until settled; null on 4F rows).
+  /** Realized PnL dollars from in-window closed round-trips. */
+  realizedPnl: doublePrecision("realized_pnl"),
+  /** Capped participation bonus points applied to finalScore. */
+  participationBonus: doublePrecision("participation_bonus"),
+  /** Closed round-trip trades inside the window. */
+  closedTradeCount: integer("closed_trade_count"),
+  /**
+   * Gross profit / gross loss dollars (loss stored as a POSITIVE number).
+   * We persist these two, NEVER a profit factor — profit factor can be
+   * Infinity (gross loss 0) and is derived at read time by the scoring
+   * engine's tiebreaker instead.
+   */
+  grossProfit: doublePrecision("gross_profit"),
+  grossLoss: doublePrecision("gross_loss"),
+  /** Hypothetical buzzer mark-out PnL for a position open at window close. */
+  markOutPnl: doublePrecision("mark_out_pnl"),
+  /** How the mark-out was resolved (e.g. "NONE", "MARKED", "EXCLUDED"). */
+  markOutStatus: text("mark_out_status"),
+  /** Honest note when a mark-out was estimated or excluded. */
+  markOutNote: text("mark_out_note"),
 });
+
+/**
+ * Direct challenges (v1): a trader challenges a specific opponent to a named
+ * future window. On ACCEPTED the challenge materializes into a Battle
+ * (battleId set via ChallengeRepository.linkBattle); both trade that same
+ * window and are scored on it.
+ */
+export const challenges = pgTable("challenges", {
+  id: text("id").primaryKey(),
+  challengerUserId: text("challenger_user_id")
+    .notNull()
+    .references(() => users.id),
+  opponentUserId: text("opponent_user_id")
+    .notNull()
+    .references(() => users.id),
+  status: challengeStatusEnum("status").notNull(),
+  /** ISO calendar date of the proposed session, e.g. "2026-07-22". */
+  sessionDate: text("session_date").notNull(),
+  battleWindow: battleWindowEnum("battle_window").notNull(),
+  /** Optional instrument pin; null = open choice (the v1 default). */
+  market: marketEnum("market"),
+  /** Account-size bracket both sides compete in, e.g. "50K". */
+  accountBracket: text("account_bracket").notNull(),
+  message: text("message"),
+  /** Set when the challenge is accepted and materialized into a battle. */
+  battleId: text("battle_id").references(() => battles.id),
+  createdAt: timestamp("created_at", {
+    withTimezone: true,
+    mode: "string",
+  }).notNull(),
+  respondedAt: timestamp("responded_at", {
+    withTimezone: true,
+    mode: "string",
+  }),
+});
+
+/**
+ * Imported 1-minute OHLCV market bars. Used by v1 settlement to mark open
+ * positions at the window close (buzzer mark-out). One bar per
+ * (instrument, barStart) — imports UPSERT on that key so re-imports are
+ * idempotent (MarketDataRepository.saveBars).
+ */
+export const marketBars = pgTable(
+  "market_bars",
+  {
+    id: text("id").primaryKey(),
+    instrument: marketEnum("instrument").notNull(),
+    /** UTC start of the 1-minute bar. */
+    barStart: timestamp("bar_start", {
+      withTimezone: true,
+      mode: "string",
+    }).notNull(),
+    open: doublePrecision("open").notNull(),
+    high: doublePrecision("high").notNull(),
+    low: doublePrecision("low").notNull(),
+    close: doublePrecision("close").notNull(),
+    volume: doublePrecision("volume").notNull(),
+    /** Where the bar came from, e.g. "csv". */
+    source: text("source").notNull(),
+    importedAt: timestamp("imported_at", {
+      withTimezone: true,
+      mode: "string",
+    }).notNull(),
+  },
+  (table) => [
+    uniqueIndex("market_bars_instrument_bar_start_idx").on(
+      table.instrument,
+      table.barStart,
+    ),
+  ],
+);
 
 // ---------------------------------------------------------------------------
 // Execution events — THE key future-facing model. Every provider (mock today,

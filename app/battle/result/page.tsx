@@ -7,6 +7,7 @@
 
 import type { Metadata } from "next";
 import Link from "next/link";
+import { redirect } from "next/navigation";
 import { ArrowRight, Home, Swords, Trophy } from "lucide-react";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
@@ -14,6 +15,7 @@ import { loadBattleView, loadShowcaseBattle } from "@/components/battle/showcase
 import { FinalScorecard } from "@/components/battle/final-scorecard";
 import { ComponentBreakdown } from "@/components/battle/component-breakdown";
 import { formatRatingDelta } from "@/components/battle/format";
+import { VERIFICATION_LABELS } from "@/components/battle-v1/labels";
 
 export const metadata: Metadata = {
   title: "Battle Result",
@@ -37,6 +39,12 @@ export default async function BattleResultPage({
       </p>
     );
   }
+  // PNL_V1 battles have no 4-factor components (their final snapshots
+  // persist zeros) — this screen would misrepresent them. Their settled
+  // result lives on the v1 battle page.
+  if (view.scoringMode === "PNL_V1") {
+    redirect(`/battles/${view.battleId}`);
+  }
 
   const { demo, opponent, narrative } = view;
   const reviewHref = `/battle/review?battle=${view.battleId}`;
@@ -47,7 +55,7 @@ export default async function BattleResultPage({
       <section className="rounded-xl border border-border bg-card px-5 py-8 text-center sm:px-8">
         <div className="flex items-center justify-center gap-2">
           <Badge variant="outline" className="text-muted-foreground">
-            Simulated Demo Data
+            {VERIFICATION_LABELS[view.verificationStatus]}
           </Badge>
           <Badge variant="outline" className="border-primary/30 text-primary">
             Final

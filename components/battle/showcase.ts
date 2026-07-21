@@ -31,6 +31,8 @@ import type {
   League,
   Market,
   OrderSide,
+  ScoringMode,
+  VerificationStatus,
 } from "@/lib/data/schema";
 import {
   BATTLE_WINDOW_LABELS,
@@ -97,7 +99,17 @@ export interface TimelineRow {
 
 export interface ShowcaseBattleView {
   battleId: string;
-  market: Market;
+  /**
+   * Which engine scored this battle. The legacy result/review screens render
+   * the 4-factor breakdown, so callers REDIRECT PNL_V1 battles to
+   * /battles/[id] instead of rendering zeroed components.
+   */
+  scoringMode: ScoringMode;
+  /** Persisted verification status — drives the honest data-source badge
+   * (SIMULATED seeded battles vs. SELF_REPORTED imports; Rule 1). */
+  verificationStatus: VerificationStatus;
+  /** Null = open instrument choice (v1 battles). Seeded battles set it. */
+  market: Market | null;
   marketLabel: string;
   windowLabel: string;
   dateLabel: string;
@@ -259,8 +271,14 @@ function buildBattleView(
 
   const base = {
     battleId: detail.battle.id,
+    scoringMode: detail.battle.scoringMode,
+    verificationStatus: detail.battle.verificationStatus,
     market: detail.battle.market,
-    marketLabel: MARKET_LABELS[detail.battle.market],
+    // Null market = open instrument choice (v1); never the case for the
+    // seeded showcase battles this loader currently serves.
+    marketLabel: detail.battle.market
+      ? MARKET_LABELS[detail.battle.market]
+      : "Open instrument",
     windowLabel: BATTLE_WINDOW_LABELS[detail.battle.battleWindow],
     dateLabel: formatDate(detail.battle.scheduledStart),
     headline,

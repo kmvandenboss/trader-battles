@@ -16,8 +16,10 @@ import type {
   AccountSnapshot,
   Battle,
   BattleMetricSnapshot,
+  Challenge,
   ExecutionEvent,
   IntegrationConnection,
+  MarketBar,
   Notification,
   RatingHistoryEntry,
   User,
@@ -55,9 +57,26 @@ export function mapBattle(row: Battle): Battle {
   return {
     ...row,
     scheduledStart: toIso(row.scheduledStart),
+    scheduledEnd: toIsoOrNull(row.scheduledEnd),
     actualStart: toIsoOrNull(row.actualStart),
     endTime: toIsoOrNull(row.endTime),
     createdAt: toIso(row.createdAt),
+  };
+}
+
+export function mapChallenge(row: Challenge): Challenge {
+  return {
+    ...row,
+    createdAt: toIso(row.createdAt),
+    respondedAt: toIsoOrNull(row.respondedAt),
+  };
+}
+
+export function mapMarketBar(row: MarketBar): MarketBar {
+  return {
+    ...row,
+    barStart: toIso(row.barStart),
+    importedAt: toIso(row.importedAt),
   };
 }
 

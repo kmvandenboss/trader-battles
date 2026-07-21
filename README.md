@@ -7,12 +7,22 @@ scored on **normalized** trading performance — not just who made the most doll
 with less drawdown can beat an opponent who made more gross profit with reckless risk. It is built to
 feel like a premium competitive platform for serious traders, not a trading journal or a casino.
 
-**This build is an interactive concept demo running on 100% simulated data.** Every trader, account,
-trade, battle, and result is generated deterministically in-memory. Nothing connects to NinjaTrader,
-Tradovate, Rithmic, any brokerage, or any prop firm, and no partnership with any firm or platform is
-implied. The architecture is designed so real integrations can replace the simulated data later without
-rewriting scoring, matchmaking, battles, leaderboards, or the UI — see
+**This build started as an interactive concept demo running on 100% simulated data.** Every seeded
+trader, account, trade, battle, and result is generated deterministically in-memory. Nothing connects
+live to NinjaTrader, Tradovate, Rithmic, any brokerage, or any prop firm, and no partnership with any
+firm or platform is implied. The architecture is designed so real integrations can replace the
+simulated data without rewriting scoring, matchmaking, battles, leaderboards, or the UI — see
 [docs/integration-roadmap.md](docs/integration-roadmap.md).
+
+**Current direction — MFFU v1.** On top of the demo, the first real v1 loop now exists: optional
+Neon Postgres behind the same repository interface ([docs/database.md](docs/database.md)), bridge
+auth for real tester accounts ([docs/auth.md](docs/auth.md)), and **settle-after-the-fact battles**
+— challenge a trader to a named future window (`/challenges`), trade your real account off-platform,
+then import your trades by **CSV** and settle on in-window realized P&L (`/battles/[id]`,
+[docs/csv-import.md](docs/csv-import.md)). Imported trades are labeled **self-reported** — never
+"Demo Verified", never broker-verified. Scoring for these battles uses the `PNL_V1` mode; the
+demo's 4-factor model is retained as a config mode ([docs/scoring.md](docs/scoring.md)). Product
+decisions behind this are in [docs/v1-divergences.md](docs/v1-divergences.md).
 
 Nothing in this product claims or implies that users will make money or become profitable by using it.
 Battle scores and ratings measure competitive execution quality, not returns.
@@ -33,16 +43,20 @@ npm install
 npm run dev        # http://localhost:3000
 ```
 
-That's it. There is no signup and no login — the app opens pre-authenticated as the demo user
-**KevinV** (Gold II, rating 1,684). There are **no required environment variables**, no database to
-provision, and no seed step to run first (the deterministic dataset is built in-memory on demand).
+That's it. With no environment variables set, the app runs the pure in-memory demo: no signup and no
+login — it opens pre-authenticated as the demo user **KevinV** (Gold II, rating 1,684) — no database
+to provision, and no seed step to run first (the deterministic dataset is built in-memory on demand).
+
+Optionally, for the v1 path: set `DATABASE_URL` (Neon Postgres — [docs/database.md](docs/database.md))
+and `AUTH_SECRET` (sign-in at `/signin` — [docs/auth.md](docs/auth.md)) per `.env.example` to enable
+real tester accounts, challenges, CSV import, and settlement persistence.
 
 ### Scripts
 
 | Command | What it does |
 |---|---|
 | `npm run dev` | Local dev server |
-| `npm run build` | Production build (13 app routes; Next reports 14 including its auto `_not-found` route) |
+| `npm run build` | Production build |
 | `npm run start` | Serve the production build |
 | `npm run lint` | ESLint |
 | `npm run seed` | Rebuilds the deterministic in-memory dataset twice, validates every invariant (volumes, referential integrity, `SIMULATED` labeling, rating chains, determinism) and prints a summary. Exits non-zero on any violation. It does **not** write to a database — there isn't one. |
@@ -64,6 +78,9 @@ Scenario ids for `npm run battle` (defined in `lib/battles/scenarios.ts`):
 | `/` | Home dashboard — rating, league, record, streak, insights, activity feed, "Find a Battle" CTA |
 | `/matchmaking` | Configure a battle, search with an expanding rating window, opponent reveal, head-to-head |
 | `/battle` | **Live Battle screen** (the centerpiece) — head-to-head scores, price chart, event feed, commentary, Demo Controls (scenario picker, pause, speed, advance, finish, reset). Accepts `?scenario=<id>` |
+| `/challenges` | **v1** — challenge a specific trader to a named future window (session date + battle window, account bracket, optional instrument pin); accept/decline incoming challenges; track the scheduled battles they materialize into |
+| `/battles/[id]` | **v1** — a scheduled battle: window details, both participants' import status, CSV trade import (self-reported), optional 1-min bars import for buzzer mark-out, the settle control, and the settled PNL_V1 result. See [docs/csv-import.md](docs/csv-import.md) |
+| `/signin` | **v1** — sign in / sign up (only when `DATABASE_URL` + `AUTH_SECRET` are set; otherwise the app stays pre-authenticated as the demo user) |
 | `/battle/result` | Battle completion screen — winner, scores, rating change, "why you won/lost" |
 | `/battle/review` | Deep post-battle analysis — component breakdown, P&L/drawdown/score charts, trade table, timeline, coaching summary. Accepts `?battle=<id>` |
 | `/leaderboards` | Filterable rankings (league / market / firm) with the demo user's standing |
@@ -103,9 +120,10 @@ The app is a standard Next.js project with no external dependencies:
 
 These are enforced throughout the codebase (see `CLAUDE.md`):
 
-1. **All data is simulated and labeled as such** — one global demo notice plus contextual
-   "Simulated Demo Data" / "Demo Verified" labels. Demo activity is never presented as
-   provider-verified trading.
+1. **Data is labeled by its true source** — one global demo notice plus contextual labels: seeded
+   demo data is "Simulated Demo Data" / "Demo Verified"; v1 CSV-imported trades are
+   "Self-reported (CSV import)". Demo activity is never presented as real trading, and imported
+   trades are never presented as demo-verified or broker-verified.
 2. **No gambling language.** Rating movement is a competitive result, never money at risk.
 3. **No profitability claims**, explicit or implied.
 4. **Scoring and rating logic is server-side and isolated** (`lib/scoring/*`, `lib/ratings/*`) as pure,
@@ -119,8 +137,13 @@ These are enforced throughout the codebase (see `CLAUDE.md`):
 
 ## Known limitations
 
-- **No real integrations.** NinjaTrader / Tradovate / Rithmic folders are README stubs only; the
-  `/integrations` page documents the planned roadmap, but nothing is connected — all data is simulated.
+- **No live integrations.** NinjaTrader / Tradovate / Rithmic folders are README stubs only; the
+  `/integrations` page documents the planned roadmap. The only real ingestion path is the v1 CSV
+  import (self-reported); everything else is simulated demo data.
+- **V1 is settle-after-the-fact.** Real battles score only after the window closes and both sides
+  import; there is no live scoring of real trades. CSV settlement limits (trade-close-granularity
+  drawdown, single-position mark-out, one account per file) are documented in
+  [docs/csv-import.md](docs/csv-import.md) and [docs/scoring.md](docs/scoring.md).
 - **Only the seeded showcase battle** (KevinV vs DeltaHunter, battle-189) carries full intra-battle
   telemetry (execution events, account snapshots, metric timelines). The other 189 seeded battles have
   final metric snapshots only, so their review pages hide the chart/trade sections and say so.
@@ -138,9 +161,15 @@ These are enforced throughout the codebase (see `CLAUDE.md`):
 ## Documentation
 
 - [docs/architecture.md](docs/architecture.md) — domain model, ingestion pipeline, module boundaries,
-  real-time strategy, integration seams
-- [docs/scoring.md](docs/scoring.md) — the 0–100 battle score, component math, penalties, worked
-  example, rating system
+  the v1 async loop, real-time strategy, integration seams
+- [docs/scoring.md](docs/scoring.md) — the `PNL_V1` settlement scoring (realized P&L + participation
+  bonus + tiebreaker cascade), the retained 4-factor model, and the rating system
+- [docs/csv-import.md](docs/csv-import.md) — the accepted CSV formats (trade export + market bars),
+  integrity checks, dedupe, and window rules — the reference for v1 testers
+- [docs/database.md](docs/database.md) — the optional Neon Postgres backend behind the repository
+  interface
+- [docs/auth.md](docs/auth.md) — the bridge auth (Auth.js) and the demo-user fallback
+- [docs/v1-divergences.md](docs/v1-divergences.md) — the product decisions behind v1
 - [docs/integration-roadmap.md](docs/integration-roadmap.md) — how real providers plug in later
 - [docs/integrity-and-verification.md](docs/integrity-and-verification.md) — verification states,
   labeling policy, and how a production version would handle integrity

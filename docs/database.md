@@ -61,6 +61,55 @@ getRepositories()                       (lib/data/repositories/index.ts)
   percentiles, firm records, and battle summaries — derived from traders +
   battles at read time, never stored — so the two backends cannot drift.
 
+## Migration 0002 — the v1 battle loop (Phase D)
+
+`drizzle/0002_bumpy_loki.sql` adds the schema for challenges → scheduled windows → CSV import →
+settlement (see [architecture.md](architecture.md) and [csv-import.md](csv-import.md)):
+
+- **New tables**
+  - `challenges` — challenger/opponent, `challenge_status` (`PENDING / ACCEPTED / DECLINED /
+    CANCELLED / EXPIRED`), the proposed `session_date` + `battle_window`, optional `market` pin,
+    `account_bracket`, message, and a `battle_id` link filled in when an accept materializes the
+    battle.
+  - `market_bars` — imported 1-minute OHLCV bars, unique per `(instrument, bar_start)`, used only
+    for buzzer mark-out prices.
+- **New enums / values**
+  - `challenge_status` and `scoring_mode` (`PNL_V1`, `NORMALIZED_4F`) enums.
+  - `battle_status` gains **`SETTLING`** (between `SCHEDULED` and `COMPLETED`). There is
+    deliberately **no separate "SETTLED" status — `COMPLETED` is the terminal settled state** for
+    both demo battles and v1 async-settled battles, so every existing status check keeps working.
+  - `integration_provider` gains **`csv`** (the first real, self-reported ingestion source).
+- **`battles` columns** — `scheduled_end`, `scoring_mode` (column default `NORMALIZED_4F` for
+  legacy/demo rows; the v1 repository `create()` sets `PNL_V1`), `account_bracket`, `decided_by`
+  (the tiebreaker-cascade tier that decided it), `resolution_detail`; `market` becomes nullable
+  (open instrument choice).
+- **`battle_participants` columns** — the PNL_V1 settlement outputs: `realized_pnl`,
+  `participation_bonus`, `closed_trade_count`, `gross_profit` / `gross_loss` (loss stored positive —
+  never a profit factor, which can be `Infinity`), `mark_out_pnl` / `mark_out_status` /
+  `mark_out_note`. Because participants now exist from scheduling time, the outcome columns
+  (`trading_account_id`, `ending_rating`, `final_score`, `result`) become nullable — they are
+  guaranteed set once a battle is `COMPLETED`.
+
+### Repository surface added for v1
+
+Both backends (in-memory and Postgres) implement the same additions in
+`lib/data/repositories/types.ts`; the row-building logic is shared in `derive.ts` so they cannot
+drift:
+
+- **`BattleRepository`** — `create` (SCHEDULED PNL_V1 battle + two participant rows),
+  `listScheduledForUser` / `getScheduledById` (metrics-free composites), `updateStatus`,
+  `saveImportedExecutions` / `listImportedExecutions` (idempotent on
+  `(sourceProvider, providerEventId, tradingAccountId)`), and `saveSettlement` — one call persists
+  participant outcomes, battle result columns, final metric snapshots, rating-history rows, and
+  profile rating/record/streak updates. **Idempotent**: re-settling replaces the prior settlement
+  rows (deterministic ids) and reverses the prior W/L contribution first.
+- **`ChallengeRepository`** — `create`, `getById`, `listForUser` (incoming/outgoing), `respond`,
+  `linkBattle`.
+- **`MarketDataRepository`** — `saveBars` (upsert per `(instrument, barStart)`), `getMarkPrice`
+  (freshest bar close within 5 minutes of the requested time, else null), `hasBars`.
+- **`TraderRepository.findOrCreateCsvAccount`** — binds a CSV `trading_account_id` to a user's
+  `SELF_REPORTED` trading account (provider `csv`), created on first import.
+
 ## Semantics notes (Postgres impl)
 
 - **Timestamps**: the schema uses `timestamp(..., { mode: "string" })`.
@@ -77,5 +126,5 @@ getRepositories()                       (lib/data/repositories/index.ts)
   id order on Postgres vs authoring order in memory.
 - **Verification labeling**: `db:seed` loads only `SIMULATED` (Demo Verified)
   rows and stores no secrets or tokens. Real imported trades (Phase D CSV)
-  will carry `SELF_REPORTED` / `CLIENT_VERIFIED` — never `SIMULATED`, never
-  "Demo Verified".
+  carry `SELF_REPORTED` — never `SIMULATED`, never "Demo Verified". See
+  [csv-import.md](csv-import.md).

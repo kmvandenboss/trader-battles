@@ -32,10 +32,20 @@ linked, trader_profiles 1500/SILVER II/firm-mffu); test account removed; 44 seed
 NOTE: with `DATABASE_URL` set, `next build` marks ALL routes dynamic (session read) — expected.
 **Vercel deploy needs `AUTH_SECRET` set manually** (the Neon integration injects only the DB vars).
 
-**Next up: Phase D (CSV import → battle windows → settlement)** per NEXT-SESSION.md — it ties
-A+B+C together. Remember the Phase D notes queued in the sections below (profit-factor
-persistence, `settleBattle.ts` consumes `ScoringMode`, conditional demo-notice copy, positive
-seed marker, Turbopack server-engine gotcha if settlement runs the engine server-side).
+**Phase D (CSV import → battle windows → settlement) is DONE, QA'd, and LIVE-SMOKED against the
+real Neon database (2026-07-21).** Migration `0002` applied (`challenges`, `market_bars`, v1
+battle/participant columns, `csv` provider, `SETTLING` status). The full v1 loop works end-to-end
+through the **production server bundle** (the Turbopack server-minifier bug class from Phase B did
+NOT reproduce — the PNL_V1 path never touches `derivePipelineMetrics`/the 4F engine, by design):
+challenge → accept → CSV import (both sides) → bars import → settle → settled result page, with
+idempotent re-import (0 new / N duplicates) and idempotent re-settlement verified live. See "Phase
+D decisions" below for the full write-up, the QA findings, and how each was closed.
+
+**Next up:** nothing blocking — v1's core loop (A+B+C+D) is complete. Remaining open items are
+tracked as **[open]** entries in `../v1-divergences.md` (self-supplied mark-out bars, overlapping-
+battle rating staleness) — none block using the platform at current volume. Natural next slice:
+wire the challenge/import/settle screens into the main nav flow more prominently (currently
+reachable at `/challenges`), or pick up a deferred item from `v1-divergences.md`.
 
 **Demo baseline (unchanged, still green):** Phase 11 DONE. Gates: `npm run lint`, `npm run build`
 (14 routes; `/scoring` + `/integrations` `○ Static`), `npm test` **142/142**, `npm run battle`
@@ -74,8 +84,9 @@ deliberate keep — the dashboard CTA is the primary entry). Everything else is 
 | 8 — Docs + full QA | ✅ done | `64dbfa1` |
 | 11 — Polish (backlog above) | ✅ done | `e0e8479` |
 | **v1 A — `PNL_V1` scoring mode** | ✅ done | `20208f9` |
-| **v1 B — Neon Postgres repos** | ✅ done (live smoke pending creds) | `f9c4b0a` |
-| **v1 C — bridge auth (Auth.js v5)** | ✅ done (live smoke pending creds) | `f129de8` |
+| **v1 B — Neon Postgres repos** | ✅ done, live-smoked | `f9c4b0a` |
+| **v1 C — bridge auth (Auth.js v5)** | ✅ done, live-smoked | `f129de8` |
+| **v1 D — CSV import + settlement** | ✅ done, live-smoked | *(pending commit)* |
 
 ## Decisions made so far (beyond CLAUDE.md's locked ones)
 
@@ -479,7 +490,102 @@ deliberate keep — the dashboard CTA is the primary entry). Everything else is 
   trade data exists; sign-up email-enumeration + `trustHost` acceptable for the bridge only.
 - Deps: `next-auth@5.0.0-beta.32`, `@auth/drizzle-adapter@1.11.3`, `bcryptjs@3.0.3` — no peer-dep
   friction on Next 16.2.10 / React 19.
-- Still pending credentials: live sign-up → sign-in → session-identity smoke.
+- Live-smoked 2026-07-21 (see the Phase D writeup below for the credentialed session that also
+  covered auth's session-identity path end to end through the real flow).
+
+### Phase D decisions (CSV import → battle windows → settlement) — data-seed, scoring-engine,
+simulation-engine, frontend-ui agents; QA'd; fixes applied post-QA
+
+Ties A+B+C together into the real v1 loop: challenge → accept → scheduled window → off-platform
+trading → CSV import (both sides) → settlement → settled result. Built across four agents in
+parallel/pipeline, then a QA pass, then targeted fixes (some by follow-up agents, some applied
+directly after the session hit its monthly spend limit mid-fix — see the QA/fix section below).
+
+- **Schema (migration `drizzle/0002_bumpy_loki.sql`)**: `INTEGRATION_PROVIDERS` +`"csv"`;
+  `BATTLE_STATUSES` +`"SETTLING"` (terminal settled state stays the existing `COMPLETED` — no
+  separate `SETTLED` value, so every existing status check still works); new `CHALLENGE_STATUSES`,
+  `SCORING_MODES` (kept in lockstep with `lib/scoring/config.ts`'s `ScoringMode` by convention, not
+  import — schema never imports scoring). `battles` gained nullable `market` (null = open
+  instrument choice), nullable `scheduledEnd`, `scoringMode` (default `NORMALIZED_4F`, so every
+  seeded/legacy row is unaffected), nullable `accountBracket`/`decidedBy`/`resolutionDetail`.
+  `battle_participants` gained nullable `tradingAccountId`/`endingRating`/`finalScore`/`result`
+  (a v1 battle is created with unsettled participants) plus the PNL_V1 settlement columns
+  (`realizedPnl`, `participationBonus`, `closedTradeCount`, `grossProfit`/`grossLoss` — **gross**
+  profit/loss persisted, never a profit factor, since it can be `Infinity` and `JSON.stringify`s to
+  `null`; `markOutPnl`/`markOutStatus`/`markOutNote`). New `challenges` and `market_bars` tables
+  (the latter with a unique `(instrument, barStart)` index; imports upsert).
+- **Repository surface** (`lib/data/repositories/types.ts`, both backends — in-memory + Postgres,
+  byte-identical row shapes via shared `derive.ts` builders): `BattleRepository.create` /
+  `listScheduledForUser` / `getScheduledById` / `updateStatus` / `saveSettlement` (idempotent —
+  re-settling replaces the prior settlement rows; profile deltas are computed by reversing the
+  battle's *previous* stored result before applying the new one, so a re-settle with a **changed**
+  result doesn't double-count W/L — tested) / `saveImportedExecutions` (dedupes on
+  provider+providerEventId+account) / `listImportedExecutions`; new `ChallengeRepository`
+  (`respond` takes an optional `{ expectedStatus }` guard — a conditional update so a concurrent
+  accept/decline/cancel racing the same challenge can't double-apply); new `MarketDataRepository`
+  (`saveBars` upserts, `getMarkPrice` returns the close of the latest bar that **ends** at/before
+  the query instant, within a 5-minute freshness window); `TraderRepository.findOrCreateCsvAccount`.
+- **CSV provider + import pipeline** (`lib/integrations/providers/csv/`, `lib/executions/import/`):
+  the real MFFU warehouse trade-export format (17 columns; `market_profit` in points, `net_profit`
+  in dollars net of fees, naive-UTC timestamps) is parsed and integrity-checked (instrument
+  resolves, recomputed points/dollars match the file within a cent/tick tolerance) BEFORE any
+  record is emitted; each CLOSED row becomes an entry fill (0 commission) + exit fill (full fees)
+  through the **existing, unmodified** `normalizeExecution → dedupe → positionLedger` pipeline, so
+  realized PnL reproduces the file's `net_profit` to the cent. Deterministic `providerEventId`s make
+  re-import a no-op. A separate 1-minute-OHLCV bars CSV format feeds `MarketDataRepository` for
+  buzzer mark-outs only (never account P&L) — full format reference: `docs/csv-import.md`.
+- **Window rules + settlement** (`lib/battles/{battleWindows,settleBattle,settlementService,
+  challengeService}.ts`, all pure/DI'd, zero `Date.now`): `windowBoundsUtc` computes ET session
+  bounds in UTC with correct US DST; `classifyWindow` (settleBattle.ts) is **the single source** of
+  which trades count — entered AND exited in-window; entered-before-window excluded entirely;
+  entered-in-window-but-exited-after aggregates into one markable open-at-close position (largest
+  same-instrument/side bucket; the rest excluded and noted) — `settlementService`'s pre-settlement
+  preview calls the same function so the two can never drift. Settlement scores via Phase A's
+  `calculatePnlBattleScore`/`resolveBattleWinner`, applies ratings via
+  `PNL_V1_RATING_CONFIG` (new: `lib/ratings/calculateRatingChange.ts`, `marginReference: 500` —
+  dollar-scaled margin instead of the 0–100 score scale, still clamped so raw P&L can't dominate
+  Elo), and rebuilds the persisted `resolutionDetail` with each trader's **display name** (not the
+  scoring engine's internal "A"/"B" positional labels).
+- **One trading account per battle per user**: `importForBattle` rejects a second CSV resolving to
+  a different account for the same (battle, user) (`ACCOUNT_MISMATCH`); `settleScheduledBattle`
+  refuses to replay stored events spanning more than one account as defense in depth.
+- **Screens**: `/challenges` (incoming/outgoing/scheduled, create-challenge form) and
+  `/battles/[id]` (window/status header, CSV import card, collapsed bars-import card,
+  participant-gated settle button, inline settled PNL_V1 result once COMPLETED). The old `/battle`
+  live-demo showcase and seeded `/battle/result`+`/battle/review` are untouched for
+  `NORMALIZED_4F` battles; both routes now redirect a `PNL_V1` battle to `/battles/[id]` instead of
+  rendering a misleading zeroed 4-factor breakdown (`components/battle-v1/labels.ts` centralizes
+  the honest verification/status/decidedBy copy). Every displayed settlement number is a straight
+  repo read — zero `lib/scoring`/`lib/ratings` imports in `app/`/`components/` (verified).
+- **Labeling (Rule 1)**: imported trades/battles are `SELF_REPORTED` end to end, surfaced as
+  "Self-reported (CSV import)" — never "Demo Verified"/`SIMULATED`. The global notice, footer, and
+  leaderboards copy became dual-source honest ("seeded demo traders … imported battles are
+  self-reported"); history/dashboard badges were already conditional on `authUserId === null` from
+  Phase C and needed no change beyond their stale `metadata.description` strings.
+- **QA (`qa-reviewer`) + fixes**: prod-server E2E smoke (the Phase B Turbopack server-minifier
+  gotcha did **not** reproduce — PNL_V1 never touches `derivePipelineMetrics`) drove the real flow
+  through `next build && next start` against Neon: challenge → accept → both CSVs imported →
+  idempotent re-import (0 new/N duplicates) → bars imported → settle → named winner banner,
+  mark-out row, rating deltas, "Self-reported" chip — then cleaned up and restored the seed. Found
+  1 HIGH (legacy `/battle/review`+`/battle/result` mislabeled real settled battles "Simulated Demo
+  Data") + 5 MEDIUM + 3 LOW; **all fixed**: the HIGH + labeling MEDIUMs (frontend-ui agent, then
+  finished directly after that agent hit the session's spend limit mid-fix); the account-mismatch
+  guard + `previewWindow`/`classifyWindow` drift risk (simulation-engine agent, same interruption);
+  the `respond` conditional-update guard + `getMarkPrice` buzzer-boundary fix (data-seed agent,
+  same interruption) — the boundary fix corrected `getMarkPrice`/`selectMarkPrice` to require the
+  selected bar to **end** at/before the query instant (previously a bar could be selected whose
+  close lagged up to a minute past the buzzer); the changed-result re-settlement test gap was
+  closed directly. The double-accept race (originally just guarded, not fully closed — a losing
+  concurrent accept could still create an orphan battle before hitting the guard) was closed by
+  reordering `acceptChallenge` to run the guarded status transition BEFORE creating anything,
+  verified with a dedicated concurrent-accept test. **Tests: 259** (up from 171 pre-Phase-D).
+- **Session note**: three follow-up fix agents were interrupted mid-task by the account's monthly
+  spend limit; their partial work was inventoried via `git status`/`git diff` and completed
+  directly (no further subagents) rather than re-dispatched, to avoid repeating the failure.
+- Still open (tracked in `../v1-divergences.md`, not blockers): self-supplied mark-out bars are
+  participant-gated but not sourced from a platform market-data feed; overlapping scheduled
+  battles settle off each battle's accept-time starting rating and a later settlement can
+  overwrite an earlier one's rating movement.
 
 ## Known state / gotchas
 
@@ -512,3 +618,14 @@ deliberate keep — the dashboard CTA is the primary entry). Everything else is 
   already a dep `^1.6.2`) — no new dependency / no lockfile change.
 - Working tree at handoff: clean after the Phase 7 commit (this doc + Phase 7 files committed
   together).
+- **Verification gates green as of the Phase D commit**: `npm run lint`, `npx tsc --noEmit`,
+  `npm test` (**259/259**), `npm run seed`, `npm run build` without `DATABASE_URL` (17 routes;
+  static split unchanged from Phase C — `/`, `/integrations`, `/leagues`, `/matchmaking`,
+  `/profile`, `/scoring`, `/signin` static; new `/challenges` + `/battles/[id]` dynamic) and with
+  it (all-dynamic, expected), prod-server (`next build && next start`) E2E against the live Neon
+  dev DB covering the full challenge → import → settle loop (see "Phase D decisions" above) with
+  cleanup back to the seeded baseline verified.
+- The Phase B Turbopack server-chunk minifier bug is now confirmed **not** to affect the v1
+  settlement path — PNL_V1 settlement never calls `derivePipelineMetrics` or the 4F engine
+  server-side. It remains a live constraint for any FUTURE feature that runs the 4F battle engine
+  server-side (e.g. SSR replay of the demo showcase).

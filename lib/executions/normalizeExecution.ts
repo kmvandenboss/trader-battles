@@ -40,6 +40,7 @@ const PROVIDER_DEFAULT_VERIFICATION: Record<
   ninjatrader: "CLIENT_VERIFIED",
   tradovate: "PROVIDER_VERIFIED",
   rithmic: "PROVIDER_VERIFIED",
+  csv: "SELF_REPORTED",
 };
 
 /** Markets by code length (desc) so "MNQU6" resolves to MNQ, not NQ. */

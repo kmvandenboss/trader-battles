@@ -116,7 +116,17 @@ Minimal, replaceable — this is a bridge until MFFU's real identity system owns
    Keep provider config minimal.
 5. Gates: sign up, sign in, session-scoped identity resolves through the seam; `npm run build`, lint.
 
-### Phase D — CSV trade import → battle windows → settlement (owner: `simulation-engine` for the import/pipeline path, `frontend-ui` for screens, `data-seed` for the battle/challenge tables)
+### Phase D — CSV trade import → battle windows → settlement (owner: `simulation-engine` for the import/pipeline path, `frontend-ui` for screens, `data-seed` for the battle/challenge tables) — ✅ DONE
+
+Shipped as specced (see STATE.md "Phase D decisions" for the full write-up): migration `0002`
+(`challenges`, `market_bars`, v1 battle/participant columns, `csv` provider, `SETTLING` status);
+CSV trade-export + bars parsers behind the existing pipeline; pure `classifyWindow`/`settleBattle`
++ DI'd `settlementService`/`challengeService`; `PNL_V1_RATING_CONFIG`; `/challenges` +
+`/battles/[id]` screens with honest `SELF_REPORTED` labeling; legacy `/battle/review`+`/battle/result`
+now redirect `PNL_V1` battles instead of mislabeling them. QA'd with a prod-server E2E smoke against
+the real Neon DB (the Phase B Turbopack gotcha did not reproduce); 1 HIGH + 5 MEDIUM + 3 LOW found,
+all fixed (account-mismatch guard, double-accept race closed, mark-out boundary correctness,
+re-settlement reversal, labeling). 259 tests total.
 
 Ties A+B+C together. This is the real v1 loop.
 

@@ -78,7 +78,9 @@ export function validateSeedDataset(data: SeedDataset): string[] {
   for (const p of data.battleParticipants) {
     if (!battleIds.has(p.battleId)) fail(`participant ${p.id}: unknown battle`);
     if (!userIds.has(p.userId)) fail(`participant ${p.id}: unknown user`);
-    if (!accountIds.has(p.tradingAccountId))
+    // Nullable in the schema (v1 fills it at import time) but every SEEDED
+    // participant must be linked to a seeded account.
+    if (p.tradingAccountId === null || !accountIds.has(p.tradingAccountId))
       fail(`participant ${p.id}: unknown account ${p.tradingAccountId}`);
   }
   for (const e of data.executionEvents) {
@@ -140,6 +142,12 @@ export function validateSeedDataset(data: SeedDataset): string[] {
     }
     if (b.winnerId !== winner.userId)
       fail(`battle ${b.id}: winnerId does not match WIN participant`);
+    // Outcome columns are nullable in the schema (v1 battles fill them at
+    // settlement) but every SEEDED battle is completed and must carry them.
+    if (winner.finalScore === null || loser.finalScore === null) {
+      fail(`battle ${b.id}: seeded participants must have final scores`);
+      continue;
+    }
     if (winner.finalScore <= loser.finalScore)
       fail(
         `battle ${b.id}: winner score ${winner.finalScore} not above loser ${loser.finalScore}`,
@@ -155,6 +163,10 @@ export function validateSeedDataset(data: SeedDataset): string[] {
     const m = finalsByParticipant.get(p.id);
     if (!m) {
       fail(`participant ${p.id}: missing final metric snapshot`);
+      continue;
+    }
+    if (p.finalScore === null) {
+      fail(`participant ${p.id}: seeded participant missing finalScore`);
       continue;
     }
     if (Math.abs(m.totalBattleScore - p.finalScore) > 0.01)

@@ -1,11 +1,88 @@
 # Scoring
 
 How a Trader Battles battle score is computed, exactly as implemented in `lib/scoring/`, and how the
-Elo-style rating change is computed in `lib/ratings/calculateRatingChange.ts`. All figures in this
-document come from simulated demo data; scores measure competitive execution quality, not returns, and
-nothing here implies users will make money.
+Elo-style rating change is computed in `lib/ratings/calculateRatingChange.ts`. Scores measure
+competitive execution quality, not returns, and nothing here implies users will make money.
 
-The whole point of the model: **a disciplined trader with less drawdown can beat someone who made more
+Two scoring modes exist side by side (`ScoringMode` in `lib/scoring/config.ts`; a battle records
+which mode scored it):
+
+- **`PNL_V1`** — the active mode for real, settled v1 battles (straight realized PnL + a capped
+  participation bonus + a tiebreaker cascade). Documented first, below.
+- **`NORMALIZED_4F`** — the 4-factor normalized model the demo was built on, **retained as a config
+  mode** (it still powers the live `/battle` showcase and all seeded history, and is not deleted).
+  Documented in full afterward.
+
+## PNL_V1 — the active mode for settled v1 battles
+
+`calculatePnlBattleScore(input, config?)` in `lib/scoring/calculatePnlBattleScore.ts`. Matching is
+by **account-size bracket** (e.g. "50K"), which is what keeps raw-dollar scoring fair — the bracket
+rides on the input for context but does not enter the math.
+
+```
+score = realized PnL in dollars ($1 = 1 point)            // closed round trips in the window
+      + buzzer mark-out PnL of a position open at close   // 0 if flat or no fresh mark
+      + participation bonus                               // pointsPerTrade × min(closedTrades, maxTrades)
+```
+
+- **Realized PnL** — the sum over closed round trips entered *and* exited inside the battle window,
+  net of commission (window filtering is done by settlement, `lib/battles/settleBattle.ts`; see
+  [csv-import.md](csv-import.md) for the exact window rules).
+- **Mark-out** — a position still open at the buzzer is hypothetically closed at the freshest bar
+  close (≤ 5 minutes old). No fresh mark → the position is **excluded and noted**
+  (`EXCLUDED_NO_MARK`), never guessed. Mark-out PnL is labeled hypothetical: battle P&L may differ
+  from account P&L.
+- **Participation bonus** — defaults **+5 points per closed trade, capped at +15** (first 3 trades);
+  `DEFAULT_PNL_SCORING_CONFIG` in `lib/scoring/config.ts`, overridable per call, never hard-coded.
+  The cap is deliberately below a typical single trade's PnL, so the bonus only swings near-ties:
+  patience still wins, only the total no-show loses. It also means a trader who took a couple of
+  trades to roughly breakeven beats a trader who sat flat.
+
+### Tiebreaker cascade
+
+`resolveBattleWinner(a, b)` compares the two scored participants tier by tier; each tier is
+consulted only when every earlier tier ties exactly (`TIEBREAKER_TIERS`):
+
+1. **`SCORE`** — the headline number above.
+2. **`REALIZED_PNL`** — battle PnL including mark-out, i.e. the score minus the participation bonus.
+3. **`PROFIT_FACTOR`** — gross profit / gross loss over closed trades (∞ when there are profits and
+   no losses).
+4. **`WINNING_TRADES`** — more trades with positive realized PnL.
+5. **`TOOK_TRADE`** — closed at least one trade beats closing none.
+6. **`FIRST_GREEN`** — earliest exit timestamp at which cumulative realized PnL went above zero.
+
+If every tier compares equal the battle is an explicit dead tie (`DEAD_TIE`) and rated as a draw.
+The deciding tier and a human-readable explanation are persisted on the battle (`decidedBy`,
+`resolutionDetail`).
+
+### Rating under PNL_V1
+
+The same Elo engine (below) is used with `PNL_V1_RATING_CONFIG`
+(`lib/ratings/calculateRatingChange.ts`): identical math, but `marginReference` is **500** instead
+of 25, because PNL_V1 scores are dollar-scaled. The margin multiplier ramps 0.75× → 1.5× over a
+$0 → $500 score gap and saturates there — roughly a decisive session on the primary 50K bracket —
+and the clamp keeps raw P&L from ever dominating rating movement. Settlement calls it with
+`completionRatio: 1` and zero violations.
+
+### PNL_V1 limitations
+
+- Round-trip CSV data only shows average entry/exit per trade, so drawdown is computed at
+  **trade-close granularity** (peak-to-trough of cumulative realized PnL) and pre-buzzer partial
+  exits of an open-at-buzzer trade are not visible (full size is marked out).
+- If open exposure at the buzzer spans multiple instruments or sides, only the largest
+  single-instrument, same-side position is marked out; the rest is excluded with explicit notes.
+- Cross-instrument tick-value variance is an accepted v1 tradeoff (instrument choice is open within
+  a bracket-matched battle).
+- Micro-scalp farming of the bonus is contained by the low cap; revisit only if abused.
+
+---
+
+## NORMALIZED_4F — the retained 4-factor model
+
+> Everything from here down describes the `NORMALIZED_4F` mode: the demo's normalized 0–100 model,
+> kept as a selectable configuration for a later version. All figures come from simulated demo data.
+
+The point of this model: **a disciplined trader with less drawdown can beat someone who made more
 gross dollars with reckless risk.** Raw P&L only enters through the performance component, where it is
 normalized against permitted risk and capped.
 
@@ -150,7 +227,10 @@ change   = round(raw · violationFactor)
   the winner's gain equals the loser's loss (up to integer rounding).
 
 All defaults live in `DEFAULT_RATING_CONFIG` (K = 32, Elo divisor 400, margin reference 25, multiplier
-0.75–1.5, dampening 0.15/violation capped at 0.5) and are overridable per call.
+0.75–1.5, dampening 0.15/violation capped at 0.5) and are overridable per call. The margin reference
+of 25 is tuned for normalized 0–100 scores; dollar-scaled `PNL_V1` battles use
+`PNL_V1_RATING_CONFIG` (margin reference 500, everything else identical — see the PNL_V1 section
+above).
 
 ## Why reckless risk doesn't pay
 

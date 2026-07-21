@@ -34,14 +34,42 @@ export const BATTLE_TYPES = [
 ] as const;
 export type BattleType = (typeof BATTLE_TYPES)[number];
 
+/**
+ * Battle lifecycle. The v1 settle-after-the-fact path is
+ * SCHEDULED → SETTLING → COMPLETED: there is intentionally NO separate
+ * "SETTLED" status — COMPLETED is the terminal settled state for both the
+ * demo's live battles and v1's async-settled battles, so every existing
+ * status check keeps working.
+ */
 export const BATTLE_STATUSES = [
   "SCHEDULED",
   "MATCHMAKING",
   "LIVE",
+  "SETTLING",
   "COMPLETED",
   "CANCELLED",
 ] as const;
 export type BattleStatus = (typeof BATTLE_STATUSES)[number];
+
+/** Direct-challenge lifecycle (a PENDING challenge materializes a Battle on ACCEPTED). */
+export const CHALLENGE_STATUSES = [
+  "PENDING",
+  "ACCEPTED",
+  "DECLINED",
+  "CANCELLED",
+  "EXPIRED",
+] as const;
+export type ChallengeStatus = (typeof CHALLENGE_STATUSES)[number];
+
+/**
+ * Scoring mode a battle was (or will be) scored under.
+ * MUST stay in lockstep with `SCORING_MODES` / `ScoringMode` in
+ * lib/scoring/config.ts — the schema must not import from lib/scoring, so
+ * the two tuples are maintained by hand. If you add a mode there, add it
+ * here (and generate a migration) in the same change.
+ */
+export const SCORING_MODES = ["PNL_V1", "NORMALIZED_4F"] as const;
+export type ScoringMode = (typeof SCORING_MODES)[number];
 
 export const BATTLE_WINDOWS = [
   "OPENING_BELL", // 9:30-11:00 a.m. ET
@@ -101,6 +129,8 @@ export const INTEGRATION_PROVIDERS = [
   "ninjatrader",
   "tradovate",
   "rithmic",
+  /** CSV file import — the first real (self-reported) v1 ingestion source. */
+  "csv",
 ] as const;
 export type IntegrationProvider = (typeof INTEGRATION_PROVIDERS)[number];
 

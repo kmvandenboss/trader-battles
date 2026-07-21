@@ -1,0 +1,4 @@
+trading_account_id,asset,asset_code,short_long,total_contracts,open_datetime,close_datetime,seconds_held,avg_market_entry,avg_market_close,market_profit,commission_and_fees,net_profit,winner_loser,status,stage,broker
+11111111-1111-4111-8111-111111111111,NQU6,NQ,SHORT,2,2026-07-13T13:30:07.153000,2026-07-13T13:36:08.071000,361,29689.625,29680.75,8.875,9.36,345.64,WIN,CLOSED,evaluation,DemoBroker
+11111111-1111-4111-8111-111111111111,NQU6,NQ,SHORT,2,2026-07-13T13:40:11.118000,2026-07-13T13:41:59.436000,108,29603,29572.75,30.25,9.36,1200.64,WIN,CLOSED,evaluation,DemoBroker
+11111111-1111-4111-8111-111111111111,NQU6,NQ,SHORT,1,2026-07-13T13:49:07.276000,2026-07-13T13:51:17.891000,131,29562.75,29536.5,26.25,4.68,520.32,WIN,CLOSED,evaluation,DemoBroker

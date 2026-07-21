@@ -38,7 +38,7 @@ import { cn } from "@/lib/utils";
 export const metadata: Metadata = {
   title: "Match History",
   description:
-    "Every past battle — result, score, rating movement, and a full review. Filterable by result, market, type, window, opponent, and date. Simulated demo data.",
+    "Every past battle — result, score, rating movement, and a full review. Filterable by result, market, type, window, opponent, and date.",
 };
 
 interface HistorySearchParams {
@@ -281,7 +281,13 @@ export default async function HistoryPage({
                       </td>
                       <td className="px-4 py-2.5 text-right">
                         <Button variant="outline" size="sm" asChild>
-                          <Link href={`/battle/review?battle=${summary.battle.id}`}>
+                          <Link
+                            href={
+                              summary.battle.scoringMode === "PNL_V1"
+                                ? `/battles/${summary.battle.id}`
+                                : `/battle/review?battle=${summary.battle.id}`
+                            }
+                          >
                             Review
                           </Link>
                         </Button>

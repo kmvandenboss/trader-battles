@@ -11,6 +11,7 @@ import { describe, expect, it } from "vitest";
 import {
   calculateRatingChange,
   DEFAULT_RATING_CONFIG,
+  PNL_V1_RATING_CONFIG,
   type RatingChangeInput,
 } from "@/lib/ratings/calculateRatingChange";
 
@@ -145,5 +146,110 @@ describe("calculateRatingChange", () => {
     const zero = calculateRatingChange(win({ completionRatio: -1 }));
     expect(zero.breakdown.completionFactor).toBe(0);
     expect(zero.change).toBe(0);
+  });
+});
+
+describe("PNL_V1_RATING_CONFIG (dollar-scaled margin for Phase D settlement)", () => {
+  /** A PNL_V1 win between rating equals with a dollar-scaled score gap. */
+  function pnlWin(
+    playerScore: number,
+    opponentScore: number,
+    overrides: Partial<RatingChangeInput> = {},
+  ): RatingChangeInput {
+    return {
+      playerRating: 1_600,
+      opponentRating: 1_600,
+      playerScore,
+      opponentScore,
+      result: "WIN",
+      ...overrides,
+    };
+  }
+
+  it("only overrides marginReference (500) — everything else matches the default config", () => {
+    expect(PNL_V1_RATING_CONFIG).toEqual({
+      ...DEFAULT_RATING_CONFIG,
+      marginReference: 500,
+    });
+  });
+
+  it("margin saturates at a $500 gap: $5,000 and $500 gaps give the identical multiplier", () => {
+    const decisive = calculateRatingChange(
+      pnlWin(5_250, 250),
+      PNL_V1_RATING_CONFIG,
+    );
+    const atReference = calculateRatingChange(
+      pnlWin(750, 250),
+      PNL_V1_RATING_CONFIG,
+    );
+    expect(decisive.breakdown.marginMultiplier).toBe(
+      atReference.breakdown.marginMultiplier,
+    );
+    expect(decisive.breakdown.marginMultiplier).toBe(
+      PNL_V1_RATING_CONFIG.marginMultiplierMax,
+    );
+    // Raw P&L cannot dominate: same rating change despite a 10× dollar gap.
+    expect(decisive.change).toBe(atReference.change);
+  });
+
+  it("margin ramps linearly: $0 gap → 0.75×, $250 gap → 1.125×", () => {
+    const tie = calculateRatingChange(pnlWin(300, 300), PNL_V1_RATING_CONFIG);
+    expect(tie.breakdown.marginMultiplier).toBeCloseTo(0.75, 10);
+    const halfway = calculateRatingChange(
+      pnlWin(400, 150),
+      PNL_V1_RATING_CONFIG,
+    );
+    expect(halfway.breakdown.marginMultiplier).toBeCloseTo(1.125, 10);
+  });
+
+  it("winner gain equals loser loss with no violations", () => {
+    const winner = calculateRatingChange(
+      pnlWin(820, 340, { playerRating: 1_684, opponentRating: 1_712 }),
+      PNL_V1_RATING_CONFIG,
+    );
+    const loser = calculateRatingChange(
+      pnlWin(340, 820, {
+        playerRating: 1_712,
+        opponentRating: 1_684,
+        result: "LOSS",
+      }),
+      PNL_V1_RATING_CONFIG,
+    );
+    // Same K, margin, and completion → equal magnitude up to integer rounding.
+    expect(Math.abs(winner.change + loser.change)).toBeLessThanOrEqual(1);
+    expect(winner.breakdown.rawChange).toBeCloseTo(
+      -loser.breakdown.rawChange,
+      10,
+    );
+  });
+
+  it("a dead tie settled as DRAW/DRAW works: equals move nothing, mismatched ratings converge", () => {
+    const equal = calculateRatingChange(
+      pnlWin(410, 410, { result: "DRAW" }),
+      PNL_V1_RATING_CONFIG,
+    );
+    expect(equal.breakdown.actualOutcome).toBe(0.5);
+    expect(equal.change).toBe(0);
+
+    // Higher-rated side of a draw loses points; lower-rated side gains them.
+    const favorite = calculateRatingChange(
+      pnlWin(410, 410, {
+        result: "DRAW",
+        playerRating: 1_712,
+        opponentRating: 1_684,
+      }),
+      PNL_V1_RATING_CONFIG,
+    );
+    const underdog = calculateRatingChange(
+      pnlWin(410, 410, {
+        result: "DRAW",
+        playerRating: 1_684,
+        opponentRating: 1_712,
+      }),
+      PNL_V1_RATING_CONFIG,
+    );
+    expect(favorite.change).toBeLessThan(0);
+    expect(underdog.change).toBeGreaterThan(0);
+    expect(Math.abs(favorite.change + underdog.change)).toBeLessThanOrEqual(1);
   });
 });

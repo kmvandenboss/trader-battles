@@ -13,9 +13,11 @@ import type {
   battleMetricSnapshots,
   battleParticipants,
   battles,
+  challenges,
   executionEvents,
   firms,
   integrationConnections,
+  marketBars,
   notifications,
   ratingHistory,
   tradingAccounts,
@@ -37,6 +39,8 @@ export type TradingAccount = typeof tradingAccounts.$inferSelect;
 export type IntegrationConnection = typeof integrationConnections.$inferSelect;
 export type Battle = typeof battles.$inferSelect;
 export type BattleParticipant = typeof battleParticipants.$inferSelect;
+export type Challenge = typeof challenges.$inferSelect;
+export type MarketBar = typeof marketBars.$inferSelect;
 export type ExecutionEvent = typeof executionEvents.$inferSelect;
 export type AccountSnapshot = typeof accountSnapshots.$inferSelect;
 export type BattleMetricSnapshot = typeof battleMetricSnapshots.$inferSelect;

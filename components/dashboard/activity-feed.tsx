@@ -39,7 +39,8 @@ export interface BattleActivity {
   iso: string;
   winner: string;
   loser: string;
-  market: Market;
+  /** Null = open instrument choice (v1 battles). Seeded battles set it. */
+  market: Market | null;
 }
 
 export type ActivityItem = NotificationActivity | BattleActivity;

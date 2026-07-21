@@ -7,6 +7,7 @@
 
 import type { Metadata } from "next";
 import Link from "next/link";
+import { redirect } from "next/navigation";
 import { ArrowLeft, Home, Info, Lightbulb, Swords } from "lucide-react";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
@@ -18,6 +19,7 @@ import { PairLineChart } from "@/components/battle-review/pair-line-chart";
 import { TradeTable } from "@/components/battle-review/trade-table";
 import { EventTimeline } from "@/components/battle-review/event-timeline";
 import { formatScore } from "@/components/battle/format";
+import { VERIFICATION_LABELS } from "@/components/battle-v1/labels";
 
 export const metadata: Metadata = {
   title: "Battle Review",
@@ -41,6 +43,12 @@ export default async function BattleReviewPage({
       </p>
     );
   }
+  // PNL_V1 battles have no 4-factor components (their final snapshots
+  // persist zeros) — this screen would misrepresent them. Their settled
+  // result lives on the v1 battle page.
+  if (view.scoringMode === "PNL_V1") {
+    redirect(`/battles/${view.battleId}`);
+  }
 
   const { demo, opponent, narrative } = view;
   const resultHref = `/battle/result?battle=${view.battleId}`;
@@ -52,7 +60,7 @@ export default async function BattleReviewPage({
         <div className="flex flex-wrap items-center justify-between gap-3">
           <div>
             <Badge variant="outline" className="text-muted-foreground">
-              Simulated Demo Data
+              {VERIFICATION_LABELS[view.verificationStatus]}
             </Badge>
             <h1 className="mt-2 text-xl font-semibold tracking-tight">
               Battle review

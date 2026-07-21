@@ -22,28 +22,40 @@ import type {
   Battle,
   BattleMetricSnapshot,
   BattleParticipant,
+  Challenge,
   ExecutionEvent,
   Firm,
+  MarketBar,
   Notification,
   RatingHistoryEntry,
   TraderProfile,
+  TradingAccount,
   User,
   UserAchievement,
 } from "../schema/types";
-import type { League, Market } from "../schema/enums";
+import type { BattleResult, League, Market } from "../schema/enums";
+import { leagueForRating } from "../leagues";
 import type {
   BattleDetail,
   BattleHistoryFilter,
   BattleSummary,
+  CreateBattleInput,
+  CreateChallengeInput,
+  CsvAccountOptions,
   EarnedAchievement,
   FirmStandings,
   FirmVsFirmResult,
   LeaderboardEntry,
   LeaderboardQuery,
+  MarketBarInput,
+  MarkPrice,
+  ParticipantSettlementInput,
   ParticipantSummary,
+  SettledBattleParticipant,
   TraderStanding,
   TraderWithProfile,
 } from "./types";
+import type { NormalizedExecutionEvent } from "../../integrations/types";
 
 // ---------------------------------------------------------------------------
 // Small shared utilities
@@ -122,13 +134,42 @@ export function battleDescComparator(a: Battle, b: Battle): number {
   );
 }
 
+/** History/standings/summaries only ever consider settled battles. */
+export function isCompletedBattle(battle: Battle): boolean {
+  return battle.status === "COMPLETED";
+}
+
+/**
+ * Narrow a participant row to its settled shape. Outcome columns are
+ * nullable in the schema (participants exist from scheduling time), but a
+ * COMPLETED battle's participants always carry them — anything else is
+ * inconsistent data and throws rather than mislabeling an unsettled row.
+ */
+export function toSettledParticipant(
+  participant: BattleParticipant,
+): SettledBattleParticipant {
+  const { tradingAccountId, endingRating, finalScore, result } = participant;
+  if (
+    tradingAccountId === null ||
+    endingRating === null ||
+    finalScore === null ||
+    result === null
+  ) {
+    throw new Error(
+      `participant ${participant.id} of battle ${participant.battleId} has no settlement`,
+    );
+  }
+  return { ...participant, tradingAccountId, endingRating, finalScore, result };
+}
+
 export function summarizeBattle(
   battle: Battle,
   participants: BattleParticipant[],
   traderById: ReadonlyMap<string, TraderWithProfile>,
   finalMetricsByParticipant: ReadonlyMap<string, BattleMetricSnapshot>,
 ): BattleSummary {
-  const summaries = participants.map((participant): ParticipantSummary => {
+  const summaries = participants.map((row): ParticipantSummary => {
+    const participant = toSettledParticipant(row);
     const trader = traderById.get(participant.userId);
     const metrics = finalMetricsByParticipant.get(participant.id);
     if (!trader || !metrics)
@@ -178,7 +219,10 @@ export function filterBattleHistory(
   participantsByBattle: ReadonlyMap<string, BattleParticipant[]>,
   filter?: BattleHistoryFilter,
 ): Battle[] {
-  let battles = battlesDesc;
+  // History is explicitly settled-battles-only: SCHEDULED/SETTLING v1
+  // battles surface through BattleRepository.listScheduledForUser instead.
+  let battles = battlesDesc.filter(isCompletedBattle);
+  // A null market (v1 open-instrument battle) never matches a market filter.
   if (filter?.market) battles = battles.filter((b) => b.market === filter.market);
   if (filter?.battleType)
     battles = battles.filter((b) => b.battleType === filter.battleType);
@@ -287,10 +331,16 @@ export function deriveFirmStandings(
   let weeklyLosses = 0;
   const marketCounts = new Map<Market, number>();
   for (const battle of battles) {
+    // Only settled battles count toward standings; a participant's null
+    // result (unsettled) or DRAW contributes to neither W nor L.
+    if (!isCompletedBattle(battle)) continue;
     const parts = participantsByBattle.get(battle.id) ?? [];
     const members = parts.filter((p) => memberIds.has(p.userId));
     if (members.length === 0) continue;
-    marketCounts.set(battle.market, (marketCounts.get(battle.market) ?? 0) + 1);
+    // A null market (open-instrument v1 battle) counts in no market bucket.
+    if (battle.market !== null) {
+      marketCounts.set(battle.market, (marketCounts.get(battle.market) ?? 0) + 1);
+    }
     if (battle.scheduledStart.slice(0, 10) >= weekFrom) {
       for (const p of members) {
         if (p.result === "WIN") weeklyWins++;
@@ -333,6 +383,9 @@ export function deriveFirmVsFirm(
   const firmOf = (userId: string) => traderById.get(userId)?.firm ?? null;
   const tally = new Map<string, { wins: number; losses: number }>();
   for (const battle of battles) {
+    // Only settled battles count; null results (unsettled) and DRAWs are
+    // excluded from the head-to-head record on both sides.
+    if (!isCompletedBattle(battle)) continue;
     const parts = participantsByBattle.get(battle.id) ?? [];
     if (parts.length !== 2) continue;
     const [a, b] = parts;
@@ -342,6 +395,7 @@ export function deriveFirmVsFirm(
     const mine = firmA.id === firm.id ? a : firmB.id === firm.id ? b : null;
     const theirs = mine === a ? firmB : mine === b ? firmA : null;
     if (!mine || !theirs) continue;
+    if (mine.result !== "WIN" && mine.result !== "LOSS") continue;
     const bucket = tally.get(theirs.id) ?? { wins: 0, losses: 0 };
     if (mine.result === "WIN") bucket.wins++;
     else bucket.losses++;
@@ -388,4 +442,383 @@ export function deriveEarnedAchievements(
       earnedAt: ua.earnedAt,
     }))
     .sort((a, b) => a.earnedAt.localeCompare(b.earnedAt));
+}
+
+// ---------------------------------------------------------------------------
+// V1 write-path helpers — shared by BOTH backends so battle creation,
+// settlement, and market-data reads behave identically in-memory and on
+// Postgres. All pure.
+// ---------------------------------------------------------------------------
+
+/** Newest first: createdAt desc, id desc as a deterministic tiebreak. */
+export function challengeDescComparator(a: Challenge, b: Challenge): number {
+  return (
+    b.createdAt.localeCompare(a.createdAt) || b.id.localeCompare(a.id)
+  );
+}
+
+/** Scheduled battles soonest first (start asc, id asc). */
+export function scheduledAscComparator(a: Battle, b: Battle): number {
+  return (
+    a.scheduledStart.localeCompare(b.scheduledStart) || a.id.localeCompare(b.id)
+  );
+}
+
+/**
+ * Starting balance for an account-size bracket label: "50K" → 50000,
+ * "150K" → 150000. Unknown/unparseable brackets yield 0 (honest "unknown"
+ * rather than a made-up balance).
+ */
+export function bracketStartingBalance(bracket: string | undefined): number {
+  if (!bracket) return 0;
+  const match = /^(\d+(?:\.\d+)?)\s*K$/i.exec(bracket.trim());
+  if (!match) return 0;
+  return Math.round(parseFloat(match[1]) * 1000);
+}
+
+/** How stale a bar may be and still serve as a mark price (exclusive bound). */
+export const MARK_PRICE_MAX_AGE_MS = 5 * 60_000;
+
+/** Stored market bars are 1-minute bars: a bar's CLOSE prints barStart + 1m. */
+export const MARKET_BAR_LENGTH_MS = 60_000;
+
+/**
+ * Pick the mark price from a set of bars: the CLOSE of the latest bar that
+ * ENDS at or before `at` (barStart <= at − 1 minute) — a bar that is still
+ * forming at the buzzer closes AFTER it and must never leak post-window
+ * price action into a mark. Freshness cutoff unchanged: barStart >
+ * at − 5 minutes. Null when nothing qualifies. Deterministic (ties on
+ * barStart cannot occur — one bar per (instrument, barStart)).
+ */
+export function selectMarkPrice(
+  bars: readonly MarketBar[],
+  atIso: string,
+): MarkPrice | null {
+  const atMs = Date.parse(atIso);
+  const latestMs = atMs - MARKET_BAR_LENGTH_MS; // bar must END by `at`
+  const earliestMs = atMs - MARK_PRICE_MAX_AGE_MS;
+  let best: MarketBar | null = null;
+  let bestMs = Number.NEGATIVE_INFINITY;
+  for (const bar of bars) {
+    const ms = Date.parse(bar.barStart);
+    if (ms <= latestMs && ms > earliestMs && ms > bestMs) {
+      best = bar;
+      bestMs = ms;
+    }
+  }
+  return best ? { price: best.close, barStart: best.barStart } : null;
+}
+
+/**
+ * Row builders for the v1 write surface. Both backends persist EXACTLY
+ * these rows; only id generation and storage differ.
+ */
+
+/** scoringConfigurationId stamped on v1 PNL_V1 battles. */
+export const PNL_V1_SCORING_CONFIGURATION_ID = "scoring-config-pnl-v1";
+
+/** Battle + participant rows for BattleRepository.create. */
+export function buildScheduledBattleRows(
+  input: CreateBattleInput,
+  battleId: string,
+  nowIso: string,
+): { battle: Battle; participants: BattleParticipant[] } {
+  const battle: Battle = {
+    id: battleId,
+    battleType: "LIVE_PERFORMANCE",
+    market: input.market ?? null,
+    status: "SCHEDULED",
+    scheduledStart: input.scheduledStart,
+    scheduledEnd: input.scheduledEnd,
+    actualStart: null,
+    endTime: null,
+    battleWindow: input.battleWindow,
+    scoringConfigurationId: PNL_V1_SCORING_CONFIGURATION_ID,
+    scoringMode: "PNL_V1",
+    accountBracket: input.accountBracket ?? null,
+    winnerId: null,
+    decidedBy: null,
+    resolutionDetail: null,
+    // Real (imported) data — never SIMULATED, never provider-verified in v1.
+    verificationStatus: "SELF_REPORTED",
+    createdAt: input.createdAt ?? nowIso,
+  };
+  const participants: BattleParticipant[] = input.participants.map((p) => ({
+    // Deterministic per (battle, user) so settlement rows can reference it.
+    id: `bp-${battleId}-${p.userId}`,
+    battleId,
+    userId: p.userId,
+    tradingAccountId: null,
+    startingRating: p.startingRating,
+    endingRating: null,
+    finalScore: null,
+    result: null,
+    verificationStatus: "SELF_REPORTED",
+    realizedPnl: null,
+    participationBonus: null,
+    closedTradeCount: null,
+    grossProfit: null,
+    grossLoss: null,
+    markOutPnl: null,
+    markOutStatus: null,
+    markOutNote: null,
+  }));
+  return { battle, participants };
+}
+
+/** Challenge row for ChallengeRepository.create. */
+export function buildChallengeRow(
+  input: CreateChallengeInput,
+  id: string,
+  nowIso: string,
+): Challenge {
+  return {
+    id,
+    challengerUserId: input.challengerUserId,
+    opponentUserId: input.opponentUserId,
+    status: "PENDING",
+    sessionDate: input.sessionDate,
+    battleWindow: input.battleWindow,
+    market: input.market ?? null,
+    accountBracket: input.accountBracket,
+    message: input.message ?? null,
+    battleId: null,
+    createdAt: input.createdAt ?? nowIso,
+    respondedAt: null,
+  };
+}
+
+/** Trading-account row for TraderRepository.findOrCreateCsvAccount. */
+export function buildCsvAccountRow(
+  userId: string,
+  externalAccountId: string,
+  opts: CsvAccountOptions | undefined,
+  id: string,
+): TradingAccount {
+  const balance = bracketStartingBalance(opts?.bracket);
+  return {
+    id,
+    userId,
+    provider: "csv",
+    externalAccountId,
+    accountType: opts?.accountType ?? "PROP_EVALUATION",
+    propFirm: "MFFU",
+    startingBalance: balance,
+    currentBalance: balance,
+    status: "ACTIVE",
+    connectionStatus: "CONNECTED",
+    // Unknown limits default to 0 ("not tracked") rather than invented caps.
+    maximumContracts: 0,
+    dailyLossLimit: 0,
+    metadata: {
+      ...(opts?.displayLabel ? { planName: opts.displayLabel } : {}),
+      note: "Created from a CSV trade import (self-reported).",
+    },
+    verificationStatus: "SELF_REPORTED",
+  };
+}
+
+/** Dedupe key for stored executions: provider-native id scoped to account. */
+export function executionDedupeKey(
+  sourceProvider: ExecutionEvent["sourceProvider"],
+  providerEventId: string,
+  tradingAccountId: string,
+): string {
+  return `${sourceProvider}|${providerEventId}|${tradingAccountId}`;
+}
+
+/** execution_events row for an imported, already-normalized event. */
+export function buildImportedExecutionRow(
+  event: NormalizedExecutionEvent,
+  id: string,
+  battleId: string,
+  userId: string,
+  tradingAccountId: string,
+): ExecutionEvent {
+  return {
+    id,
+    providerEventId: event.providerEventId,
+    sourceProvider: event.sourceProvider,
+    tradingAccountId,
+    battleId,
+    userId,
+    instrument: event.instrument,
+    side: event.side,
+    quantity: event.quantity,
+    price: event.price,
+    commission: event.commission,
+    occurredAt: event.occurredAt,
+    receivedAt: event.receivedAt,
+    eventType: event.eventType,
+    verificationStatus: event.verificationStatus,
+    rawPayload: event.rawPayload,
+  };
+}
+
+/**
+ * market_bars row. The id is deterministic per (instrument, barStart) —
+ * the same key the unique index enforces — so upserts converge.
+ */
+export function buildMarketBarRow(
+  instrument: Market,
+  bar: MarketBarInput,
+  source: string,
+  importedAt: string,
+): MarketBar {
+  const barStart = new Date(bar.barStart).toISOString();
+  return {
+    id: `bar-${instrument}-${barStart}`,
+    instrument,
+    barStart,
+    open: bar.open,
+    high: bar.high,
+    low: bar.low,
+    close: bar.close,
+    volume: bar.volume,
+    source,
+    importedAt,
+  };
+}
+
+/**
+ * The settlement rows for one participant: the updated participant row, the
+ * final battle_metric_snapshot, and the rating_history entry. Row ids are
+ * deterministic per (battle, user) so a re-settlement REPLACES the prior
+ * rows instead of accumulating.
+ */
+export function buildParticipantSettlementRows(
+  stored: BattleParticipant,
+  input: ParticipantSettlementInput,
+  battleId: string,
+  endTime: string,
+  verificationStatus: Battle["verificationStatus"],
+): {
+  participant: BattleParticipant;
+  finalSnapshot: BattleMetricSnapshot;
+  ratingEntry: RatingHistoryEntry;
+} {
+  const participant: BattleParticipant = {
+    ...stored,
+    tradingAccountId: input.tradingAccountId,
+    endingRating: input.endingRating,
+    finalScore: input.finalScore,
+    result: input.result,
+    verificationStatus,
+    realizedPnl: input.realizedPnl,
+    participationBonus: input.participationBonus,
+    closedTradeCount: input.closedTradeCount,
+    grossProfit: input.grossProfit,
+    grossLoss: input.grossLoss,
+    markOutPnl: input.markOutPnl,
+    markOutStatus: input.markOutStatus,
+    markOutNote: input.markOutNote,
+  };
+  const finalSnapshot: BattleMetricSnapshot = {
+    id: `bms-${battleId}-${input.userId}-final`,
+    battleId,
+    participantId: stored.id,
+    // Battle P&L includes the hypothetical mark-out — may differ from
+    // account P&L; the UI labels this honestly.
+    netPnl: input.realizedPnl + input.markOutPnl,
+    maximumDrawdown: input.maximumDrawdown,
+    tradeCount: input.tradeCount,
+    riskUtilization: 0,
+    // PNL_V1 has no 4-factor components; zeros keep the row shape valid.
+    performanceScore: 0,
+    riskEfficiencyScore: 0,
+    disciplineScore: 0,
+    consistencyScore: 0,
+    totalBattleScore: input.finalScore,
+    isFinal: true,
+    timestamp: endTime,
+    verificationStatus,
+  };
+  const ratingEntry: RatingHistoryEntry = {
+    id: `rh-${battleId}-${input.userId}`,
+    userId: input.userId,
+    battleId,
+    previousRating: stored.startingRating,
+    newRating: input.endingRating,
+    change: input.endingRating - stored.startingRating,
+    createdAt: endTime,
+  };
+  return { participant, finalSnapshot, ratingEntry };
+}
+
+/**
+ * The trader-profile fields a settlement updates. Pure so both backends
+ * apply EXACTLY the same rating/record/streak semantics.
+ *
+ * Idempotency contract (see BattleRepository.saveSettlement): the caller
+ * passes `previousResult` = the result this battle had already contributed
+ * (null on first settlement). The prior W/L contribution is reversed before
+ * the new one is applied, and the rating is set ABSOLUTELY to endingRating,
+ * so re-running the same settlement converges to the identical profile.
+ *
+ * Streak semantics: a DRAW resets the streak to 0. On a re-settlement whose
+ * result is unchanged the streak is left untouched; if a re-settlement
+ * CHANGES the result, the prior chain cannot be reconstructed, so the
+ * streak restarts at 1 / -1 / 0 in the new direction (best-effort,
+ * documented limitation — bestWinStreak never shrinks).
+ */
+export function applySettlementToProfile(
+  profile: TraderProfile,
+  previousResult: BattleResult | null,
+  result: BattleResult,
+  endingRating: number,
+): TraderProfile {
+  let {
+    seasonWins,
+    seasonLosses,
+    lifetimeWins,
+    lifetimeLosses,
+    currentStreak,
+    bestWinStreak,
+  } = profile;
+
+  // Reverse the prior contribution of THIS battle (re-settlement).
+  if (previousResult === "WIN") {
+    seasonWins = Math.max(0, seasonWins - 1);
+    lifetimeWins = Math.max(0, lifetimeWins - 1);
+  } else if (previousResult === "LOSS") {
+    seasonLosses = Math.max(0, seasonLosses - 1);
+    lifetimeLosses = Math.max(0, lifetimeLosses - 1);
+  }
+
+  // Apply the new result. A DRAW increments neither W nor L.
+  if (result === "WIN") {
+    seasonWins += 1;
+    lifetimeWins += 1;
+  } else if (result === "LOSS") {
+    seasonLosses += 1;
+    lifetimeLosses += 1;
+  }
+
+  if (previousResult === null) {
+    // First settlement: extend/replace the running streak.
+    if (result === "WIN") currentStreak = currentStreak >= 0 ? currentStreak + 1 : 1;
+    else if (result === "LOSS")
+      currentStreak = currentStreak <= 0 ? currentStreak - 1 : -1;
+    else currentStreak = 0;
+  } else if (previousResult !== result) {
+    // Changed re-settlement: restart in the new direction (best effort).
+    currentStreak = result === "WIN" ? 1 : result === "LOSS" ? -1 : 0;
+  }
+  // previousResult === result → streak unchanged (idempotent re-run).
+
+  bestWinStreak = Math.max(bestWinStreak, currentStreak);
+  const placement = leagueForRating(endingRating);
+  return {
+    ...profile,
+    rating: endingRating,
+    league: placement.league,
+    division: placement.division,
+    seasonWins,
+    seasonLosses,
+    lifetimeWins,
+    lifetimeLosses,
+    currentStreak,
+    bestWinStreak,
+    seasonHighRating: Math.max(profile.seasonHighRating, endingRating),
+  };
 }

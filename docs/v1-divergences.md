@@ -34,9 +34,11 @@
   - **[proposed] For the future live version:** mark against a short VWAP/TWAP over the final 30–60s and
     freeze new entries in the final minute, to defeat last-tick manipulation and hail-mary open positions.
   - **[decided] For v1 (async/CSV):** the live mark-out mechanics don't apply yet. Score realized
-    round-trips whose exit falls inside the window; if an import carries an open position at window close,
-    use the mark price provided in the import (or, absent one, exclude it and note it). Full live mark-out
-    is deferred with the real-time-data phase.
+    round-trips entered AND exited inside the window; positions still open at window close (including
+    in-window entries that exit after the buzzer) are marked out using **separately imported 1-minute
+    OHLCV bars** (`market_bars` via `MarketDataRepository.getMarkPrice`, close of the last bar ending
+    at/before the buzzer, 5-minute freshness cutoff) — absent usable bars, the position is excluded and
+    noted. Full live mark-out is deferred with the real-time-data phase.
   - **[decided] Battle P&L may differ from account P&L** (mark-out is hypothetical). Label clearly in UI.
 - **[decided] Capped participation bonus + tiebreaker cascade** — encourages activity without requiring
   it, and eliminates the need for a minimum-activity rule. This is the chosen answer to "straight PnL
@@ -78,6 +80,14 @@
   async/CSV for v1. Resolve before the real-time-battle phase.
 - **[open] Collusion & multi-accounting controls.** Not urgent while nothing is at stake (no prizes,
   unranked-friendly). Must be in place before prizes or meaningful ranked rewards.
+- **[open] Self-supplied mark-out bars.** In v1 the OHLCV bars used for buzzer mark-outs are imported
+  by users (participant-gated), not fetched from a market-data feed — a mark price is only as honest as
+  the bars file. Contained while nothing is at stake; replace with a platform-side market-data source
+  before prizes/ranked rewards.
+- **[open] Overlapping scheduled battles.** Ratings settle off each battle's accept-time
+  `startingRating`, and settlement writes the rating absolutely — two overlapping windows settle off
+  stale ratings and the later settlement overwrites the earlier movement. Acceptable at v1 volume;
+  revisit (sequential settlement or rating-delta application) before concurrent windows are common.
 - **[open] Verification labeling for imported trades.** CSV-imported trades are **not** `SIMULATED`
   ("Demo Verified") and **not** provider-verified either — treat as `SELF_REPORTED` / `CLIENT_VERIFIED`
   and label honestly. Confirm the exact status + UI copy during implementation.

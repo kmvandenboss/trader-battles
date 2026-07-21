@@ -6,7 +6,16 @@
  * All derivation logic (standings, leaderboards, percentiles, battle
  * summaries) lives in ./derive.ts and is SHARED with the Postgres
  * implementation (./postgres) so the two backends cannot drift apart.
+ *
+ * WRITES (the v1 surface: battles.create/saveSettlement, challenges,
+ * market bars, CSV accounts, imported executions) are in-process mutations
+ * of indexes built from the seed dataset. They are EPHEMERAL — per process,
+ * lost on restart — which keeps the zero-DB demo fully functional for dev
+ * and tests. Mutable rows are cloned at construction so writes never touch
+ * the shared seed-dataset singleton.
  */
+
+import { randomUUID } from "node:crypto";
 
 import type { SeedDataset } from "../seed";
 import type {
@@ -14,24 +23,39 @@ import type {
   Battle,
   BattleMetricSnapshot,
   BattleParticipant,
+  Challenge,
   ExecutionEvent,
   Firm,
+  MarketBar,
   Notification,
   RatingHistoryEntry,
+  TradingAccount,
 } from "../schema/types";
-import type { Market } from "../schema/enums";
+import type { BattleStatus, ChallengeStatus, Market } from "../schema/enums";
 import {
+  applySettlementToProfile,
   battleDescComparator,
   buildBattleDetail,
+  buildChallengeRow,
+  buildCsvAccountRow,
+  buildImportedExecutionRow,
+  buildMarketBarRow,
+  buildParticipantSettlementRows,
+  buildScheduledBattleRows,
   buildTraderIndex,
+  challengeDescComparator,
   computeStanding,
   deriveEarnedAchievements,
   deriveFirmStandings,
   deriveFirmVsFirm,
+  executionDedupeKey,
   filterAndSortTraders,
   filterBattleHistory,
+  isCompletedBattle,
   leaderboardPage,
   push,
+  scheduledAscComparator,
+  selectMarkPrice,
   sortFirmStandings,
   sortNotificationsDesc,
   sortRatingHistory,
@@ -42,19 +66,32 @@ import type {
   BattleDetail,
   BattleHistoryFilter,
   BattleRepository,
+  BattleSettlementInput,
   BattleSummary,
+  ChallengeRepository,
+  ChallengeResponseStatus,
+  CreateBattleInput,
+  CreateChallengeInput,
+  CsvAccountOptions,
   EarnedAchievement,
   FirmRepository,
   FirmStandings,
   FirmVsFirmResult,
+  ImportExecutionsResult,
   LeaderboardQuery,
   LeaderboardRepository,
+  MarketBarInput,
+  MarketDataRepository,
+  MarkPrice,
   NotificationRepository,
   Repositories,
+  SaveBarsResult,
+  ScheduledBattle,
   TraderRepository,
   TraderStanding,
   TraderWithProfile,
 } from "./types";
+import type { NormalizedExecutionEvent } from "../../integrations/types";
 
 class Indexes {
   readonly traderById: Map<string, TraderWithProfile>;
@@ -69,23 +106,38 @@ class Indexes {
   readonly accountSnapshotsByBattle = new Map<string, AccountSnapshot[]>();
   readonly ratingHistoryByUser = new Map<string, RatingHistoryEntry[]>();
   readonly notificationsByUser = new Map<string, Notification[]>();
-  /** Completed battles, most recent first. */
+  /** All battles (any status), most recent first. */
   readonly battlesDesc: Battle[];
   readonly demoUserId: string;
+  /** Mutable copy of trading accounts (CSV accounts are appended here). */
+  readonly accounts: TradingAccount[];
+  /** Ephemeral v1 writes. */
+  readonly challenges: Challenge[] = [];
+  /** `${instrument}|${barStartIso}` -> bar (the unique-index key). */
+  readonly marketBars = new Map<string, MarketBar>();
+  /** Stored execution dedupe keys (provider|eventId|accountId). */
+  readonly executionKeys = new Set<string>();
 
   constructor(readonly data: SeedDataset) {
     for (const firm of data.firms) {
       this.firmById.set(firm.id, firm);
       this.firmBySlug.set(firm.slug, firm);
     }
-    this.traderById = buildTraderIndex(data.users, data.traderProfiles, data.firms);
+    // Clone every row the write surface can mutate, so in-process writes
+    // never leak into the shared seed-dataset singleton.
+    const profiles = data.traderProfiles.map((p) => ({ ...p }));
+    this.accounts = data.tradingAccounts.map((a) => ({ ...a }));
+    this.traderById = buildTraderIndex(data.users, profiles, data.firms);
     const demo = data.users.find((u) => u.isDemoUser);
     if (!demo) throw new Error("seed dataset has no demo user");
     this.demoUserId = demo.id;
 
-    for (const battle of data.battles) this.battleById.set(battle.id, battle);
-    this.battlesDesc = [...data.battles].sort(battleDescComparator);
-    for (const p of data.battleParticipants) {
+    for (const battle of data.battles) {
+      this.battleById.set(battle.id, { ...battle });
+    }
+    this.battlesDesc = [...this.battleById.values()].sort(battleDescComparator);
+    for (const seeded of data.battleParticipants) {
+      const p = { ...seeded };
       push(this.participantsByBattle, p.battleId, p);
       push(this.battleIdsByUser, p.userId, p.battleId);
     }
@@ -95,6 +147,9 @@ class Indexes {
     }
     for (const e of data.executionEvents) {
       if (e.battleId) push(this.eventsByBattle, e.battleId, e);
+      this.executionKeys.add(
+        executionDedupeKey(e.sourceProvider, e.providerEventId, e.tradingAccountId),
+      );
     }
     for (const s of data.accountSnapshots) {
       if (s.battleId) push(this.accountSnapshotsByBattle, s.battleId, s);
@@ -122,6 +177,22 @@ class Indexes {
       this.accountSnapshotsByBattle.get(battle.id) ?? [],
       this.metricsByBattle.get(battle.id) ?? [],
     );
+  }
+
+  requireTrader(userId: string): TraderWithProfile {
+    const trader = this.traderById.get(userId);
+    if (!trader) throw new Error(`unknown trader ${userId}`);
+    return trader;
+  }
+
+  scheduledComposite(battle: Battle): ScheduledBattle {
+    const participants = (this.participantsByBattle.get(battle.id) ?? []).map(
+      (participant) => ({
+        participant,
+        trader: this.requireTrader(participant.userId),
+      }),
+    );
+    return { battle, participants };
   }
 }
 
@@ -162,11 +233,33 @@ class InMemoryTraderRepository implements TraderRepository {
   }
 
   async getAccounts(userId: string) {
-    return this.ix.data.tradingAccounts.filter((a) => a.userId === userId);
+    return this.ix.accounts.filter((a) => a.userId === userId);
   }
 
   async getConnections(userId: string) {
     return this.ix.data.integrationConnections.filter((c) => c.userId === userId);
+  }
+
+  async findOrCreateCsvAccount(
+    userId: string,
+    externalAccountId: string,
+    opts?: CsvAccountOptions,
+  ): Promise<TradingAccount> {
+    const existing = this.ix.accounts.find(
+      (a) =>
+        a.userId === userId &&
+        a.provider === "csv" &&
+        a.externalAccountId === externalAccountId,
+    );
+    if (existing) return existing;
+    const account = buildCsvAccountRow(
+      userId,
+      externalAccountId,
+      opts,
+      `acct-csv-${randomUUID()}`,
+    );
+    this.ix.accounts.push(account);
+    return account;
   }
 }
 
@@ -175,7 +268,7 @@ class InMemoryBattleRepository implements BattleRepository {
 
   async getById(battleId: string): Promise<BattleDetail | null> {
     const battle = this.ix.battleById.get(battleId);
-    return battle ? this.ix.detail(battle) : null;
+    return battle && isCompletedBattle(battle) ? this.ix.detail(battle) : null;
   }
 
   async listForUser(
@@ -195,15 +288,251 @@ class InMemoryBattleRepository implements BattleRepository {
 
   async getLatestForUser(userId: string): Promise<BattleDetail | null> {
     const ids = new Set(this.ix.battleIdsByUser.get(userId) ?? []);
-    const latest = this.ix.battlesDesc.find((b) => ids.has(b.id));
+    const latest = this.ix.battlesDesc.find(
+      (b) => ids.has(b.id) && isCompletedBattle(b),
+    );
     return latest ? this.ix.detail(latest) : null;
   }
 
   async listRecent(limit: number): Promise<BattleSummary[]> {
     return this.ix.battlesDesc
-      .filter((b) => b.status === "COMPLETED")
+      .filter(isCompletedBattle)
       .slice(0, limit)
       .map((b) => this.ix.summarize(b));
+  }
+
+  // --- V1 write surface ----------------------------------------------------
+
+  async create(input: CreateBattleInput): Promise<Battle> {
+    const battleId = `battle-v1-${randomUUID()}`;
+    const { battle, participants } = buildScheduledBattleRows(
+      input,
+      battleId,
+      new Date().toISOString(),
+    );
+    this.ix.battleById.set(battle.id, battle);
+    this.ix.battlesDesc.push(battle);
+    this.ix.battlesDesc.sort(battleDescComparator);
+    this.ix.participantsByBattle.set(battle.id, participants);
+    for (const p of participants) push(this.ix.battleIdsByUser, p.userId, battle.id);
+    return battle;
+  }
+
+  async listScheduledForUser(userId: string): Promise<ScheduledBattle[]> {
+    const ids = new Set(this.ix.battleIdsByUser.get(userId) ?? []);
+    return [...this.ix.battleById.values()]
+      .filter(
+        (b) =>
+          ids.has(b.id) && (b.status === "SCHEDULED" || b.status === "SETTLING"),
+      )
+      .sort(scheduledAscComparator)
+      .map((b) => this.ix.scheduledComposite(b));
+  }
+
+  async getScheduledById(battleId: string): Promise<ScheduledBattle | null> {
+    const battle = this.ix.battleById.get(battleId);
+    return battle ? this.ix.scheduledComposite(battle) : null;
+  }
+
+  async updateStatus(battleId: string, status: BattleStatus): Promise<void> {
+    const battle = this.ix.battleById.get(battleId);
+    if (!battle) throw new Error(`unknown battle ${battleId}`);
+    battle.status = status;
+  }
+
+  async saveSettlement(input: BattleSettlementInput): Promise<void> {
+    const battle = this.ix.battleById.get(input.battleId);
+    if (!battle) throw new Error(`unknown battle ${input.battleId}`);
+    const stored = this.ix.participantsByBattle.get(input.battleId) ?? [];
+
+    // Replace any prior FINAL snapshots for this battle (intra-battle
+    // telemetry, when present, is preserved).
+    const keptMetrics = (this.ix.metricsByBattle.get(input.battleId) ?? []).filter(
+      (m) => !m.isFinal,
+    );
+
+    for (const pInput of input.participants) {
+      const participant = stored.find((p) => p.userId === pInput.userId);
+      if (!participant) {
+        throw new Error(
+          `battle ${input.battleId} has no participant for user ${pInput.userId}`,
+        );
+      }
+      const previousResult = participant.result;
+      const rows = buildParticipantSettlementRows(
+        participant,
+        pInput,
+        input.battleId,
+        input.endTime,
+        input.verificationStatus,
+      );
+      Object.assign(participant, rows.participant);
+      keptMetrics.push(rows.finalSnapshot);
+      this.ix.finalMetricsByParticipant.set(participant.id, rows.finalSnapshot);
+
+      const history = (this.ix.ratingHistoryByUser.get(pInput.userId) ?? []).filter(
+        (r) => r.battleId !== input.battleId,
+      );
+      history.push(rows.ratingEntry);
+      this.ix.ratingHistoryByUser.set(pInput.userId, sortRatingHistory(history));
+
+      const trader = this.ix.requireTrader(pInput.userId);
+      Object.assign(
+        trader.profile,
+        applySettlementToProfile(
+          trader.profile,
+          previousResult,
+          pInput.result,
+          pInput.endingRating,
+        ),
+      );
+    }
+    this.ix.metricsByBattle.set(input.battleId, keptMetrics);
+
+    battle.status = "COMPLETED";
+    battle.winnerId = input.winnerId;
+    battle.endTime = input.endTime;
+    battle.actualStart = battle.actualStart ?? battle.scheduledStart;
+    battle.decidedBy = input.decidedBy;
+    battle.resolutionDetail = input.resolutionDetail;
+  }
+
+  async saveImportedExecutions(
+    battleId: string,
+    participantUserId: string,
+    tradingAccountId: string,
+    events: NormalizedExecutionEvent[],
+  ): Promise<ImportExecutionsResult> {
+    if (!this.ix.battleById.has(battleId))
+      throw new Error(`unknown battle ${battleId}`);
+    let inserted = 0;
+    let skippedDuplicates = 0;
+    for (const event of events) {
+      const key = executionDedupeKey(
+        event.sourceProvider,
+        event.providerEventId,
+        tradingAccountId,
+      );
+      if (this.ix.executionKeys.has(key)) {
+        skippedDuplicates++;
+        continue;
+      }
+      const row = buildImportedExecutionRow(
+        event,
+        `exec-${randomUUID()}`,
+        battleId,
+        participantUserId,
+        tradingAccountId,
+      );
+      push(this.ix.eventsByBattle, battleId, row);
+      this.ix.executionKeys.add(key);
+      inserted++;
+    }
+    return { inserted, skippedDuplicates };
+  }
+
+  async listImportedExecutions(
+    battleId: string,
+    userId: string,
+  ): Promise<ExecutionEvent[]> {
+    return (this.ix.eventsByBattle.get(battleId) ?? [])
+      .filter((e) => e.userId === userId)
+      .sort(
+        (a, b) =>
+          a.occurredAt.localeCompare(b.occurredAt) || a.id.localeCompare(b.id),
+      );
+  }
+}
+
+class InMemoryChallengeRepository implements ChallengeRepository {
+  constructor(private readonly ix: Indexes) {}
+
+  async create(input: CreateChallengeInput): Promise<Challenge> {
+    const challenge = buildChallengeRow(
+      input,
+      `challenge-${randomUUID()}`,
+      new Date().toISOString(),
+    );
+    this.ix.challenges.push(challenge);
+    return challenge;
+  }
+
+  async getById(id: string): Promise<Challenge | null> {
+    return this.ix.challenges.find((c) => c.id === id) ?? null;
+  }
+
+  async listForUser(
+    userId: string,
+  ): Promise<{ incoming: Challenge[]; outgoing: Challenge[] }> {
+    const incoming = this.ix.challenges
+      .filter((c) => c.opponentUserId === userId)
+      .sort(challengeDescComparator);
+    const outgoing = this.ix.challenges
+      .filter((c) => c.challengerUserId === userId)
+      .sort(challengeDescComparator);
+    return { incoming, outgoing };
+  }
+
+  async respond(
+    id: string,
+    status: ChallengeResponseStatus,
+    respondedAt: string,
+    options?: { expectedStatus?: ChallengeStatus },
+  ): Promise<Challenge | null> {
+    const challenge = this.ix.challenges.find((c) => c.id === id);
+    if (!challenge) return null;
+    // Double-accept guard: only update when the current status matches.
+    if (options?.expectedStatus && challenge.status !== options.expectedStatus)
+      return null;
+    challenge.status = status;
+    challenge.respondedAt = respondedAt;
+    return challenge;
+  }
+
+  async linkBattle(id: string, battleId: string): Promise<void> {
+    const challenge = this.ix.challenges.find((c) => c.id === id);
+    if (!challenge) throw new Error(`unknown challenge ${id}`);
+    challenge.battleId = battleId;
+  }
+}
+
+class InMemoryMarketDataRepository implements MarketDataRepository {
+  constructor(private readonly ix: Indexes) {}
+
+  async saveBars(
+    instrument: Market,
+    bars: MarketBarInput[],
+    source: string,
+  ): Promise<SaveBarsResult> {
+    const importedAt = new Date().toISOString();
+    let inserted = 0;
+    let replaced = 0;
+    for (const bar of bars) {
+      const row = buildMarketBarRow(instrument, bar, source, importedAt);
+      const key = `${instrument}|${row.barStart}`;
+      if (this.ix.marketBars.has(key)) replaced++;
+      else inserted++;
+      this.ix.marketBars.set(key, row);
+    }
+    return { inserted, replaced };
+  }
+
+  async getMarkPrice(instrument: Market, atIso: string): Promise<MarkPrice | null> {
+    const bars = [...this.ix.marketBars.values()].filter(
+      (b) => b.instrument === instrument,
+    );
+    return selectMarkPrice(bars, atIso);
+  }
+
+  async hasBars(instrument: Market, fromIso: string, toIso: string): Promise<boolean> {
+    const fromMs = Date.parse(fromIso);
+    const toMs = Date.parse(toIso);
+    for (const bar of this.ix.marketBars.values()) {
+      if (bar.instrument !== instrument) continue;
+      const ms = Date.parse(bar.barStart);
+      if (ms >= fromMs && ms <= toMs) return true;
+    }
+    return false;
   }
 }
 
@@ -226,7 +555,7 @@ class InMemoryFirmRepository implements FirmRepository {
     return deriveFirmStandings(
       firm,
       [...this.ix.traderById.values()],
-      this.ix.data.battles,
+      [...this.ix.battleById.values()],
       this.ix.participantsByBattle,
     );
   }
@@ -249,7 +578,7 @@ class InMemoryFirmRepository implements FirmRepository {
       firm,
       this.ix.traderById,
       this.ix.firmById,
-      this.ix.data.battles,
+      [...this.ix.battleById.values()],
       this.ix.participantsByBattle,
     );
   }
@@ -291,6 +620,8 @@ export function createInMemoryRepositories(data: SeedDataset): Repositories {
   return {
     traders: new InMemoryTraderRepository(ix),
     battles: new InMemoryBattleRepository(ix),
+    challenges: new InMemoryChallengeRepository(ix),
+    marketData: new InMemoryMarketDataRepository(ix),
     leaderboards: new InMemoryLeaderboardRepository(ix),
     firms: new InMemoryFirmRepository(ix),
     achievements: new InMemoryAchievementRepository(ix),

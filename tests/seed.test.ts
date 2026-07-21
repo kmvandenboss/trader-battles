@@ -215,7 +215,9 @@ describe("referential integrity and verification labeling", () => {
     const battleIds = new Set(dataset.battles.map((b) => b.id));
     for (const p of dataset.battleParticipants) {
       expect(userIds.has(p.userId)).toBe(true);
-      expect(accountIds.has(p.tradingAccountId)).toBe(true);
+      // Nullable in the schema since v1, but never null on seeded rows.
+      expect(p.tradingAccountId).not.toBeNull();
+      expect(accountIds.has(p.tradingAccountId!)).toBe(true);
       expect(battleIds.has(p.battleId)).toBe(true);
     }
     for (const r of dataset.ratingHistory) {

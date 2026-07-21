@@ -8,8 +8,10 @@
  *
  * Where this plugs in: Phase D settlement (`lib/battles/settleBattle.ts`)
  * filters each participant's imported round-trip trades to the battle window
- * `[startAt, endAt]` (a trade counts when its EXIT falls inside the window —
- * scoring starts at battle start, no earlier-in-the-day trades), then calls
+ * `[startAt, endAt]` (a trade counts when it is BOTH entered and exited
+ * inside the window — scoring starts at battle start, so trades entered
+ * before the window are excluded entirely, and trades entered in-window but
+ * exited after it are treated as open-at-the-buzzer and marked out), then calls
  * `calculatePnlBattleScore` per participant and `resolveBattleWinner` on the
  * pair. The existing `NORMALIZED_4F` engine (`calculateBattleScore.ts`) is
  * untouched; a battle selects a mode via `ScoringMode` in `./config`.

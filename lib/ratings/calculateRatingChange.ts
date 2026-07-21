@@ -46,6 +46,28 @@ export const DEFAULT_RATING_CONFIG: RatingConfig = {
   violationDampeningMax: 0.5,
 };
 
+/**
+ * Rating config for v1 PNL_V1 battles (intended consumer: Phase D settlement,
+ * `lib/battles/settleBattle.ts`).
+ *
+ * PNL_V1 headline scores are DOLLAR-scaled (realized PnL + capped
+ * participation bonus — see `lib/scoring/calculatePnlBattleScore.ts`), not the
+ * normalized 0–100 scores `marginReference: 25` was tuned for. With the
+ * default, any $25+ gap would saturate the margin multiplier at 1.5×, making
+ * margin meaningless for ordinary wins.
+ *
+ * `marginReference: 500` ramps the multiplier 0.75× → 1.5× over a $0 → $500
+ * score gap, saturating at $500+ — roughly a decisive session on the primary
+ * 50K account bracket. The clamp on the margin ratio keeps raw P&L from ever
+ * dominating (CLAUDE.md rule: rating movement is Elo-driven; P&L only
+ * modulates margin within [0.75, 1.5]). Config only — the rating math is
+ * unchanged.
+ */
+export const PNL_V1_RATING_CONFIG: RatingConfig = {
+  ...DEFAULT_RATING_CONFIG,
+  marginReference: 500,
+};
+
 export interface RatingChangeInput {
   playerRating: number;
   opponentRating: number;

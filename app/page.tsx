@@ -44,7 +44,7 @@ import {
 export const metadata: Metadata = {
   title: "Home",
   description:
-    "Your competitive overview — rating, league, season record, streak, recent battle, and the Find a Battle entry point. Simulated demo data.",
+    "Your competitive overview — rating, league, season record, streak, recent battle, and the Find a Battle entry point.",
 };
 
 function InsightCard({

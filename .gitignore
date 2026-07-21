@@ -34,6 +34,11 @@ yarn-error.log*
 .env*
 !.env.example
 
+# real trading data (local test inputs — never commit; anonymized fixtures live in tests/fixtures)
+/kevin-trades-*.csv
+/NQ_1min_*.csv
+/*_trades_*.csv
+
 # vercel
 .vercel
 

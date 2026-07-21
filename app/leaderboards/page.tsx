@@ -26,12 +26,13 @@ import {
   formatWinRate,
 } from "@/components/battle/format";
 import { QueryFilters } from "@/components/filters/query-filters";
+import { DATA_SOURCE_NOTE } from "@/components/battle-v1/labels";
 import { cn } from "@/lib/utils";
 
 export const metadata: Metadata = {
   title: "Leaderboards",
   description:
-    "Global, league, and market rankings across the season — rating, record, win rate, and streak. Simulated demo data.",
+    "Global, league, and market rankings across the season — rating, record, win rate, and streak. Includes seeded demo traders.",
 };
 
 interface LeaderboardsSearchParams {
@@ -74,12 +75,12 @@ export default async function LeaderboardsPage({
               Leaderboards
             </h1>
             <Badge variant="outline" className="text-muted-foreground">
-              Simulated Demo Data
+              Demo + self-reported
             </Badge>
           </div>
           <p className="mt-1 text-sm text-muted-foreground">
             Season standings by rating. Ratings reflect competitive
-            performance, not money.
+            performance, not money. {DATA_SOURCE_NOTE}
           </p>
         </div>
       </header>
@@ -147,7 +148,7 @@ export default async function LeaderboardsPage({
             {total} trader{total === 1 ? "" : "s"}
             {league || market ? " (filtered)" : ""}
           </span>
-          <span className="tracking-wide uppercase">Simulated</span>
+          <span className="tracking-wide uppercase">Demo + self-reported</span>
         </div>
 
         {entries.length === 0 ? (
