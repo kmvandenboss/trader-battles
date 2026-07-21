@@ -21,13 +21,21 @@ keep the 4-factor engine), Neon Postgres behind the repo interface, bridge auth 
 CSV import → settle-after-the-fact battle scoring. Phases: A scoring → B Postgres → C auth →
 D CSV import + settlement (A first; B/C parallel; D depends on all).
 
-**Phases A (v1 scoring mode), B (Neon Postgres), and C (bridge auth) are DONE and committed** —
-see the per-phase decisions below. **Next up: connect the real Neon database, then Phase D.**
-Concretely, once Kevin provides the Neon credentials (`DATABASE_URL` pooled +
-`DATABASE_URL_UNPOOLED` direct + `AUTH_SECRET` in `.env.local`): run `npm run db:migrate`,
-`npm run db:seed`, then the deferred live smokes — Postgres-backed pages render the same seeded
-data, and sign-up → sign-in → session identity resolves through the seam. Then Phase D
-(CSV import → battle windows → settlement) per NEXT-SESSION.md.
+**Phases A (v1 scoring mode), B (Neon Postgres), and C (bridge auth) are DONE, committed, and
+LIVE-SMOKED against the real Neon database (2026-07-21).** `.env.local` holds the Neon
+credentials (`DATABASE_URL` pooled + `DATABASE_URL_UNPOOLED` direct + locally generated
+`AUTH_SECRET`); migrations `0000`+`0001` applied; `db:seed` loaded all 1,792 rows and re-runs
+idempotently. Live smokes green: all 12 routes 200 against Postgres; headless-Chromium auth flow
+(sign-up → session identity via the seam → sign-out demo fallback → sign-in → generic
+wrong-password error, 9/9 checks); DB rows verified (bcrypt hash stored, users.auth_user_id
+linked, trader_profiles 1500/SILVER II/firm-mffu); test account removed; 44 seeded users intact.
+NOTE: with `DATABASE_URL` set, `next build` marks ALL routes dynamic (session read) — expected.
+**Vercel deploy needs `AUTH_SECRET` set manually** (the Neon integration injects only the DB vars).
+
+**Next up: Phase D (CSV import → battle windows → settlement)** per NEXT-SESSION.md — it ties
+A+B+C together. Remember the Phase D notes queued in the sections below (profit-factor
+persistence, `settleBattle.ts` consumes `ScoringMode`, conditional demo-notice copy, positive
+seed marker, Turbopack server-engine gotcha if settlement runs the engine server-side).
 
 **Demo baseline (unchanged, still green):** Phase 11 DONE. Gates: `npm run lint`, `npm run build`
 (14 routes; `/scoring` + `/integrations` `○ Static`), `npm test` **142/142**, `npm run battle`
