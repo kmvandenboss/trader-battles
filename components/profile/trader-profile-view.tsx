@@ -12,6 +12,7 @@ import Link from "next/link";
 import { Shield, Target, TrendingUp, Trophy } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { Badge } from "@/components/ui/badge";
+import { Button } from "@/components/ui/button";
 import { LeagueBadge } from "@/components/battle/league-badge";
 import { TraderAvatar } from "@/components/battle/trader-avatar";
 import { StatPill } from "@/components/battle/stat-pill";
@@ -131,25 +132,34 @@ export function TraderProfileView({ view }: { view: ProfileViewModel }) {
             </div>
           </div>
 
-          {view.standing ? (
-            <div className="grid shrink-0 grid-cols-3 gap-2 lg:w-72">
-              <StatPill
-                label="Global"
-                value={`#${view.standing.globalRank}`}
-                className="text-center"
-              />
-              <StatPill
-                label="Percentile"
-                value={topPercent !== null ? `Top ${topPercent}%` : "—"}
-                className="text-center"
-              />
-              <StatPill
-                label={`${view.primaryMarket} rank`}
-                value={`#${view.standing.marketRank}`}
-                className="text-center"
-              />
-            </div>
-          ) : null}
+          <div className="flex shrink-0 flex-col items-stretch gap-3 lg:w-72 lg:items-end">
+            {!view.isSelf ? (
+              <Button asChild size="sm" className="w-full lg:w-auto">
+                <Link href={`/challenges?opponent=${view.userId}#create-challenge`}>
+                  Challenge {view.displayName}
+                </Link>
+              </Button>
+            ) : null}
+            {view.standing ? (
+              <div className="grid w-full grid-cols-3 gap-2">
+                <StatPill
+                  label="Global"
+                  value={`#${view.standing.globalRank}`}
+                  className="text-center"
+                />
+                <StatPill
+                  label="Percentile"
+                  value={topPercent !== null ? `Top ${topPercent}%` : "—"}
+                  className="text-center"
+                />
+                <StatPill
+                  label={`${view.primaryMarket} rank`}
+                  value={`#${view.standing.marketRank}`}
+                  className="text-center"
+                />
+              </div>
+            ) : null}
+          </div>
         </div>
       </section>
 

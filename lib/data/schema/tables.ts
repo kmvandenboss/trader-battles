@@ -519,6 +519,35 @@ export const ratingHistory = pgTable("rating_history", {
   }).notNull(),
 });
 
+/**
+ * Refer-a-friend invites: a trader invites someone not yet on the platform by
+ * entering a name/email/message. NOT wired to actual email sending yet — this
+ * is only the capture record for a future invite-send + join flow. No status
+ * column: there is no join/acceptance flow built yet, so there is nothing for
+ * a status to track (a status can be added later alongside that flow).
+ */
+export const traderInvites = pgTable(
+  "trader_invites",
+  {
+    id: text("id").primaryKey(),
+    inviterUserId: text("inviter_user_id")
+      .notNull()
+      .references(() => users.id),
+    inviteeName: text("invitee_name"),
+    inviteeEmail: text("invitee_email").notNull(),
+    message: text("message"),
+    /** Short shareable code/slug for a not-yet-built join link. */
+    inviteCode: text("invite_code").notNull(),
+    createdAt: timestamp("created_at", {
+      withTimezone: true,
+      mode: "string",
+    }).notNull(),
+  },
+  (table) => [
+    uniqueIndex("trader_invites_invite_code_idx").on(table.inviteCode),
+  ],
+);
+
 // ---------------------------------------------------------------------------
 // Achievements & notifications
 // ---------------------------------------------------------------------------

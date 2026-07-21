@@ -29,6 +29,7 @@ import type {
   MarketBar,
   Notification,
   RatingHistoryEntry,
+  TraderInvite,
   TradingAccount,
 } from "../schema/types";
 import type { BattleStatus, ChallengeStatus, Market } from "../schema/enums";
@@ -39,6 +40,7 @@ import {
   buildChallengeRow,
   buildCsvAccountRow,
   buildImportedExecutionRow,
+  buildInviteRow,
   buildMarketBarRow,
   buildParticipantSettlementRows,
   buildScheduledBattleRows,
@@ -51,6 +53,7 @@ import {
   executionDedupeKey,
   filterAndSortTraders,
   filterBattleHistory,
+  inviteDescComparator,
   isCompletedBattle,
   leaderboardPage,
   push,
@@ -72,12 +75,14 @@ import type {
   ChallengeResponseStatus,
   CreateBattleInput,
   CreateChallengeInput,
+  CreateInviteInput,
   CsvAccountOptions,
   EarnedAchievement,
   FirmRepository,
   FirmStandings,
   FirmVsFirmResult,
   ImportExecutionsResult,
+  InviteRepository,
   LeaderboardQuery,
   LeaderboardRepository,
   MarketBarInput,
@@ -113,6 +118,8 @@ class Indexes {
   readonly accounts: TradingAccount[];
   /** Ephemeral v1 writes. */
   readonly challenges: Challenge[] = [];
+  /** Ephemeral refer-a-friend invite writes. */
+  readonly invites: TraderInvite[] = [];
   /** `${instrument}|${barStartIso}` -> bar (the unique-index key). */
   readonly marketBars = new Map<string, MarketBar>();
   /** Stored execution dedupe keys (provider|eventId|accountId). */
@@ -496,6 +503,27 @@ class InMemoryChallengeRepository implements ChallengeRepository {
   }
 }
 
+class InMemoryInviteRepository implements InviteRepository {
+  constructor(private readonly ix: Indexes) {}
+
+  async create(input: CreateInviteInput): Promise<TraderInvite> {
+    const invite = buildInviteRow(
+      input,
+      `invite-${randomUUID()}`,
+      randomUUID().slice(0, 8),
+      new Date().toISOString(),
+    );
+    this.ix.invites.push(invite);
+    return invite;
+  }
+
+  async listForUser(inviterUserId: string): Promise<TraderInvite[]> {
+    return this.ix.invites
+      .filter((i) => i.inviterUserId === inviterUserId)
+      .sort(inviteDescComparator);
+  }
+}
+
 class InMemoryMarketDataRepository implements MarketDataRepository {
   constructor(private readonly ix: Indexes) {}
 
@@ -621,6 +649,7 @@ export function createInMemoryRepositories(data: SeedDataset): Repositories {
     traders: new InMemoryTraderRepository(ix),
     battles: new InMemoryBattleRepository(ix),
     challenges: new InMemoryChallengeRepository(ix),
+    invites: new InMemoryInviteRepository(ix),
     marketData: new InMemoryMarketDataRepository(ix),
     leaderboards: new InMemoryLeaderboardRepository(ix),
     firms: new InMemoryFirmRepository(ix),

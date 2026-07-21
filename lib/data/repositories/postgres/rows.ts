@@ -22,6 +22,7 @@ import type {
   MarketBar,
   Notification,
   RatingHistoryEntry,
+  TraderInvite,
   User,
   UserAchievement,
 } from "../../schema/types";
@@ -70,6 +71,10 @@ export function mapChallenge(row: Challenge): Challenge {
     createdAt: toIso(row.createdAt),
     respondedAt: toIsoOrNull(row.respondedAt),
   };
+}
+
+export function mapTraderInvite(row: TraderInvite): TraderInvite {
+  return { ...row, createdAt: toIso(row.createdAt) };
 }
 
 export function mapMarketBar(row: MarketBar): MarketBar {

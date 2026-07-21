@@ -21,6 +21,7 @@ import type {
   notifications,
   ratingHistory,
   tradingAccounts,
+  traderInvites,
   traderProfiles,
   userAchievements,
   users,
@@ -40,6 +41,7 @@ export type IntegrationConnection = typeof integrationConnections.$inferSelect;
 export type Battle = typeof battles.$inferSelect;
 export type BattleParticipant = typeof battleParticipants.$inferSelect;
 export type Challenge = typeof challenges.$inferSelect;
+export type TraderInvite = typeof traderInvites.$inferSelect;
 export type MarketBar = typeof marketBars.$inferSelect;
 export type ExecutionEvent = typeof executionEvents.$inferSelect;
 export type AccountSnapshot = typeof accountSnapshots.$inferSelect;

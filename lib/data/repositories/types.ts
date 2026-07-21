@@ -32,6 +32,7 @@ import type {
   IntegrationConnection,
   Notification,
   RatingHistoryEntry,
+  TraderInvite,
   TraderProfile,
   TradingAccount,
   User,
@@ -248,6 +249,17 @@ export interface CreateChallengeInput {
 /** The states a pending challenge can be moved to by a user response. */
 export type ChallengeResponseStatus = "ACCEPTED" | "DECLINED" | "CANCELLED";
 
+/**
+ * Refer-a-friend invite capture (no email sending yet — this is only the
+ * data record a future send + join flow will build against).
+ */
+export interface CreateInviteInput {
+  inviterUserId: string;
+  inviteeName: string | null;
+  inviteeEmail: string;
+  message: string | null;
+}
+
 export interface MarketBarInput {
   /** ISO UTC start of the 1-minute bar. */
   barStart: string;
@@ -390,6 +402,13 @@ export interface ChallengeRepository {
   linkBattle(id: string, battleId: string): Promise<void>;
 }
 
+export interface InviteRepository {
+  /** Create an invite (id "invite-<uuid>"; inviteCode generated internally). */
+  create(input: CreateInviteInput): Promise<TraderInvite>;
+  /** A user's sent invites, newest first. */
+  listForUser(inviterUserId: string): Promise<TraderInvite[]>;
+}
+
 export interface MarketDataRepository {
   /**
    * Upsert 1-minute OHLCV bars for an instrument, one row per
@@ -445,6 +464,7 @@ export interface Repositories {
   traders: TraderRepository;
   battles: BattleRepository;
   challenges: ChallengeRepository;
+  invites: InviteRepository;
   marketData: MarketDataRepository;
   leaderboards: LeaderboardRepository;
   firms: FirmRepository;

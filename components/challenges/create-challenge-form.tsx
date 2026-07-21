@@ -47,6 +47,8 @@ interface CreateChallengeFormProps {
   brackets: BracketOption[];
   /** Today's ET calendar date ("YYYY-MM-DD") — the earliest valid session. */
   minSessionDate: string;
+  /** Pre-selects the opponent (e.g. deep-linked from a trader's profile). */
+  defaultOpponentUserId?: string;
 }
 
 const INPUT_CLASS =
@@ -82,6 +84,7 @@ export function CreateChallengeForm({
   markets,
   brackets,
   minSessionDate,
+  defaultOpponentUserId,
 }: CreateChallengeFormProps) {
   const [state, formAction, pending] = useActionState(
     createChallengeAction,
@@ -97,7 +100,7 @@ export function CreateChallengeForm({
           required
           disabled={pending}
           className={INPUT_CLASS}
-          defaultValue=""
+          defaultValue={defaultOpponentUserId ?? ""}
         >
           <option value="" disabled>
             Pick a trader…

@@ -38,6 +38,7 @@ import {
   CreateChallengeForm,
   type OpponentOption,
 } from "@/components/challenges/create-challenge-form";
+import { InviteFriendForm } from "@/components/challenges/invite-friend-form";
 import {
   IncomingChallengeButtons,
   OutgoingChallengeButtons,
@@ -175,16 +176,23 @@ const CHALLENGE_STATUS_LABEL: Record<Challenge["status"], string> = {
   EXPIRED: "Expired",
 };
 
-export default async function ChallengesPage() {
+export default async function ChallengesPage({
+  searchParams,
+}: {
+  searchParams: Promise<{ opponent?: string }>;
+}) {
+  const { opponent } = await searchParams;
   const repos = getRepositories();
   const identity = await getCurrentIdentity();
   const selfId = identity.trader.user.id;
 
-  const [allTraders, challengeLists, scheduledBattles] = await Promise.all([
-    repos.traders.list(),
-    repos.challenges.listForUser(selfId),
-    repos.battles.listScheduledForUser(selfId),
-  ]);
+  const [allTraders, challengeLists, scheduledBattles, sentInvites] =
+    await Promise.all([
+      repos.traders.list(),
+      repos.challenges.listForUser(selfId),
+      repos.battles.listScheduledForUser(selfId),
+      repos.invites.listForUser(selfId),
+    ]);
 
   const traderById = new Map(allTraders.map((t) => [t.user.id, t]));
   // A challenge counterpart may not be in the default list (e.g. a signed-up
@@ -227,6 +235,15 @@ export default async function ChallengesPage() {
       label: `${t.user.displayName} · ${t.profile.rating.toLocaleString("en-US")} · ${formatLeague(t.profile.league, t.profile.division)}`,
     }))
     .sort((a, b) => a.label.localeCompare(b.label));
+
+  const defaultOpponentUserId =
+    opponent && opponent !== selfId && opponents.some((o) => o.userId === opponent)
+      ? opponent
+      : undefined;
+
+  const recentInvites = [...sentInvites]
+    .sort((a, b) => b.createdAt.localeCompare(a.createdAt))
+    .slice(0, 6);
 
   const isEphemeralDemo = !process.env.DATABASE_URL;
 
@@ -375,7 +392,7 @@ export default async function ChallengesPage() {
           ) : null}
         </div>
 
-        <aside>
+        <aside id="create-challenge">
           <div className="rounded-xl border border-border bg-card p-5">
             <h2 className="text-sm font-semibold">Create a challenge</h2>
             <p className="mt-1 mb-4 text-xs text-muted-foreground">
@@ -397,7 +414,42 @@ export default async function ChallengesPage() {
                 label: ACCOUNT_BRACKET_LABELS[b],
               }))}
               minSessionDate={etTodayIso()}
+              defaultOpponentUserId={defaultOpponentUserId}
             />
+          </div>
+
+          <div className="mt-6 rounded-xl border border-border bg-card p-5">
+            <h2 className="text-sm font-semibold">
+              Invite a friend to battle
+            </h2>
+            <p className="mt-1 mb-4 text-xs text-muted-foreground">
+              Not on Trader Battles yet? Send an invite and share the link
+              yourself — no accounts are created for them automatically.
+            </p>
+            <InviteFriendForm />
+
+            {recentInvites.length > 0 ? (
+              <div className="mt-5 space-y-2 border-t border-border/60 pt-4">
+                <h3 className="text-xs font-semibold tracking-wide text-muted-foreground uppercase">
+                  Recently invited
+                </h3>
+                <ul className="space-y-1.5">
+                  {recentInvites.map((invite) => (
+                    <li
+                      key={invite.id}
+                      className="flex items-center justify-between gap-2 text-xs"
+                    >
+                      <span className="truncate text-foreground/90">
+                        {invite.inviteeName || invite.inviteeEmail}
+                      </span>
+                      <span className="shrink-0 text-muted-foreground">
+                        Invited · {formatDate(invite.createdAt)}
+                      </span>
+                    </li>
+                  ))}
+                </ul>
+              </div>
+            ) : null}
           </div>
         </aside>
       </div>

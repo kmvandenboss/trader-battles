@@ -23,3 +23,15 @@ export interface ChallengeResponseState {
 export const INITIAL_CHALLENGE_RESPONSE_STATE: ChallengeResponseState = {
   error: null,
 };
+
+export interface InviteFormState {
+  status: "idle" | "success" | "error";
+  error: string | null;
+  /** Set on success — the created invite's shareable code. */
+  inviteCode?: string;
+}
+
+export const INITIAL_INVITE_FORM_STATE: InviteFormState = {
+  status: "idle",
+  error: null,
+};

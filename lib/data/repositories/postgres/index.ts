@@ -33,6 +33,7 @@ import type {
   IntegrationConnection,
   Notification,
   RatingHistoryEntry,
+  TraderInvite,
   TradingAccount,
 } from "../../schema/types";
 import type { BattleStatus, ChallengeStatus, Market } from "../../schema/enums";
@@ -43,6 +44,7 @@ import {
   buildChallengeRow,
   buildCsvAccountRow,
   buildImportedExecutionRow,
+  buildInviteRow,
   buildMarketBarRow,
   buildParticipantSettlementRows,
   buildScheduledBattleRows,
@@ -54,6 +56,7 @@ import {
   executionDedupeKey,
   filterAndSortTraders,
   filterBattleHistory,
+  inviteDescComparator,
   isCompletedBattle,
   leaderboardPage,
   MARK_PRICE_MAX_AGE_MS,
@@ -76,12 +79,14 @@ import type {
   ChallengeResponseStatus,
   CreateBattleInput,
   CreateChallengeInput,
+  CreateInviteInput,
   CsvAccountOptions,
   EarnedAchievement,
   FirmRepository,
   FirmStandings,
   FirmVsFirmResult,
   ImportExecutionsResult,
+  InviteRepository,
   LeaderboardQuery,
   LeaderboardRepository,
   MarketBarInput,
@@ -107,6 +112,7 @@ import {
   mapMarketBar,
   mapNotification,
   mapRatingHistoryEntry,
+  mapTraderInvite,
   mapUser,
   mapUserAchievement,
 } from "./rows";
@@ -725,6 +731,29 @@ class PostgresChallengeRepository implements ChallengeRepository {
   }
 }
 
+class PostgresInviteRepository implements InviteRepository {
+  constructor(private readonly db: Db) {}
+
+  async create(input: CreateInviteInput): Promise<TraderInvite> {
+    const invite = buildInviteRow(
+      input,
+      `invite-${randomUUID()}`,
+      randomUUID().slice(0, 8),
+      new Date().toISOString(),
+    );
+    await this.db.insert(t.traderInvites).values(invite);
+    return invite;
+  }
+
+  async listForUser(inviterUserId: string): Promise<TraderInvite[]> {
+    const rows = await this.db
+      .select()
+      .from(t.traderInvites)
+      .where(eq(t.traderInvites.inviterUserId, inviterUserId));
+    return rows.map(mapTraderInvite).sort(inviteDescComparator);
+  }
+}
+
 class PostgresMarketDataRepository implements MarketDataRepository {
   constructor(private readonly db: Db) {}
 
@@ -957,6 +986,7 @@ export function createPostgresRepositories(databaseUrl: string): Repositories {
     traders: new PostgresTraderRepository(db),
     battles: new PostgresBattleRepository(db),
     challenges: new PostgresChallengeRepository(db),
+    invites: new PostgresInviteRepository(db),
     marketData: new PostgresMarketDataRepository(db),
     leaderboards: new PostgresLeaderboardRepository(db),
     firms: new PostgresFirmRepository(db),

@@ -43,9 +43,12 @@ import { etTodayIso } from "@/components/challenges/et-date";
 import type {
   ChallengeFormState,
   ChallengeResponseState,
+  InviteFormState,
 } from "@/components/challenges/action-state";
 
 const MAX_MESSAGE_LENGTH = 280;
+const MAX_INVITEE_NAME_LENGTH = 80;
+const EMAIL_PATTERN = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
 
 function fieldString(formData: FormData, key: string): string {
   const value = formData.get(key);
@@ -108,6 +111,39 @@ export async function createChallengeAction(
 
   revalidatePath("/challenges");
   return { status: "success", error: null };
+}
+
+export async function createInviteAction(
+  _prev: InviteFormState,
+  formData: FormData,
+): Promise<InviteFormState> {
+  const identity = await getCurrentIdentity();
+
+  const inviteeName = fieldString(formData, "inviteeName")
+    .trim()
+    .slice(0, MAX_INVITEE_NAME_LENGTH);
+  const inviteeEmail = fieldString(formData, "inviteeEmail").trim();
+  const message = fieldString(formData, "message").trim();
+
+  if (!inviteeEmail || !EMAIL_PATTERN.test(inviteeEmail)) {
+    return { status: "error", error: "Enter a valid email address." };
+  }
+  if (message.length > MAX_MESSAGE_LENGTH) {
+    return {
+      status: "error",
+      error: `Keep the message under ${MAX_MESSAGE_LENGTH} characters.`,
+    };
+  }
+
+  const invite = await getRepositories().invites.create({
+    inviterUserId: identity.trader.user.id,
+    inviteeName: inviteeName === "" ? null : inviteeName,
+    inviteeEmail,
+    message: message === "" ? null : message,
+  });
+
+  revalidatePath("/challenges");
+  return { status: "success", error: null, inviteCode: invite.inviteCode };
 }
 
 export async function acceptChallengeAction(
