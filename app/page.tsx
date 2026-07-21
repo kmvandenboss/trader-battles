@@ -1,8 +1,9 @@
 /**
- * / — Home dashboard. Server component: the demo user's competitive overview,
- * a Find-a-Battle entry point, the most recent battle, performance insights,
- * and a merged activity feed. Every value is read through getRepositories()
- * (seed data); nothing is computed in the UI.
+ * / — Home dashboard. Server component: the current trader's competitive
+ * overview (session user via the lib/auth seam, demo fallback otherwise), a
+ * Find-a-Battle entry point, the most recent battle, performance insights,
+ * and a merged activity feed. Every value is read through getRepositories();
+ * nothing is computed in the UI.
  */
 
 import type { Metadata } from "next";
@@ -18,6 +19,7 @@ import {
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { getRepositories } from "@/lib/data/repositories";
+import { getCurrentTrader } from "@/lib/auth/currentUser";
 import { loadShowcaseBattle } from "@/components/battle/showcase";
 import { LeagueBadge } from "@/components/battle/league-badge";
 import { TraderAvatar } from "@/components/battle/trader-avatar";
@@ -72,11 +74,14 @@ function InsightCard({
 
 export default async function HomePage() {
   const { traders, leaderboards, notifications, battles } = getRepositories();
-  const demoTrader = await traders.getDemoTrader();
-  const profile = demoTrader.profile;
-  const standing = await leaderboards.getStanding(demoTrader.user.id);
-  const ratingHistory = await traders.getRatingHistory(demoTrader.user.id);
+  const trader = await getCurrentTrader();
+  const profile = trader.profile;
+  const standing = await leaderboards.getStanding(trader.user.id);
+  const ratingHistory = await traders.getRatingHistory(trader.user.id);
   const showcase = await loadShowcaseBattle();
+  // Seeded traders (authUserId null) render the demo-data label; a signed-in
+  // real trader must never be labeled as simulated (Rule 1).
+  const isSeededTrader = trader.user.authUserId === null;
 
   // Rating trend sparkline (already-computed newRating values from the seed).
   const sparkline: SparklinePoint[] = ratingHistory.map((entry, index) => ({
@@ -85,7 +90,7 @@ export default async function HomePage() {
   }));
 
   // Merged activity feed: the demo user's notifications + platform battles.
-  const notes = await notifications.listForUser(demoTrader.user.id);
+  const notes = await notifications.listForUser(trader.user.id);
   const recentBattles = await battles.listRecent(6);
   const activity: ActivityItem[] = [
     ...notes.map(
@@ -131,19 +136,21 @@ export default async function HomePage() {
         <div className="flex flex-col gap-6 lg:flex-row lg:items-center lg:justify-between">
           <div className="flex items-start gap-4">
             <TraderAvatar
-              displayName={demoTrader.user.displayName}
+              displayName={trader.user.displayName}
               accent="demo"
               size="lg"
             />
             <div>
               <div className="flex flex-wrap items-center gap-2">
                 <h1 className="text-2xl font-semibold tracking-tight">
-                  {demoTrader.user.displayName}
+                  {trader.user.displayName}
                 </h1>
                 <LeagueBadge league={profile.league} division={profile.division} />
-                <Badge variant="outline" className="text-muted-foreground">
-                  Simulated Demo Data
-                </Badge>
+                {isSeededTrader ? (
+                  <Badge variant="outline" className="text-muted-foreground">
+                    Simulated Demo Data
+                  </Badge>
+                ) : null}
               </div>
               <p className="mt-1 text-sm text-muted-foreground">
                 {formatLeague(profile.league, profile.division)} · Primary{" "}
@@ -182,14 +189,16 @@ export default async function HomePage() {
                   : null}
               </span>
             </div>
-            <RatingSparkline
-              data={sparkline}
-              ariaLabel={
-                ratingHistory.length > 0
-                  ? `Season rating trend from ${ratingHistory[0].previousRating.toLocaleString("en-US")} to ${profile.rating.toLocaleString("en-US")}.`
-                  : "Season rating trend."
-              }
-            />
+            {ratingHistory.length > 0 ? (
+              <RatingSparkline
+                data={sparkline}
+                ariaLabel={`Season rating trend from ${ratingHistory[0].previousRating.toLocaleString("en-US")} to ${profile.rating.toLocaleString("en-US")}.`}
+              />
+            ) : (
+              <p className="flex h-16 items-center justify-center rounded-md border border-dashed border-border text-[11px] text-muted-foreground">
+                Your rating trend appears after your first battle.
+              </p>
+            )}
             <Button size="lg" className="mt-3 w-full" asChild>
               <Link href="/matchmaking">
                 <Swords data-icon="inline-start" aria-hidden />
@@ -291,7 +300,21 @@ export default async function HomePage() {
                 </Button>
               </div>
             </section>
-          ) : null}
+          ) : (
+            <section className="rounded-xl border border-border bg-card p-5">
+              <h2 className="text-sm font-semibold">Latest battle</h2>
+              <p className="mt-3 text-sm text-muted-foreground">
+                No battles on record yet. Queue up, trade your window, and your
+                results will land here.
+              </p>
+              <Button variant="outline" size="sm" className="mt-4" asChild>
+                <Link href="/matchmaking">
+                  Find your first battle
+                  <ArrowRight data-icon="inline-end" aria-hidden />
+                </Link>
+              </Button>
+            </section>
+          )}
 
           {/* Performance insights */}
           <section>
@@ -327,8 +350,9 @@ export default async function HomePage() {
               />
             </div>
             <p className="mt-2 text-[11px] text-muted-foreground">
-              Component strengths are seed-authored 0–100 skill indicators, not a
-              claim of trading returns.
+              {isSeededTrader
+                ? "Component strengths are seed-authored 0–100 skill indicators, not a claim of trading returns."
+                : "Component strengths are 0–100 competitive skill indicators (neutral 50 until battles inform them), not a claim of trading returns."}
             </p>
           </section>
         </div>

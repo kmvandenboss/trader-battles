@@ -5,6 +5,7 @@ import { DemoNotice } from "@/components/layout/demo-notice";
 import { SiteHeader, type HeaderUser } from "@/components/layout/site-header";
 import { SiteFooter } from "@/components/layout/site-footer";
 import { getRepositories } from "@/lib/data/repositories";
+import { getCurrentIdentity } from "@/lib/auth/currentUser";
 import type { HeaderNotification } from "@/components/layout/notifications-menu";
 import { formatLeague, initialsFor } from "@/components/battle/format";
 
@@ -32,12 +33,15 @@ export default async function RootLayout({
 }: Readonly<{
   children: React.ReactNode;
 }>) {
-  // Notifications are read server-side (repositories are server-only) and
-  // handed to the client header as a plain serializable list.
-  const { traders, notifications } = getRepositories();
-  const demo = await traders.getDemoTrader();
-  const notes = await notifications.listForUser(demo.user.id);
-  const unreadCount = await notifications.countUnread(demo.user.id);
+  // Identity resolves through the lib/auth seam (session trader, or the
+  // seeded demo fallback when unauthenticated / no database). Notifications
+  // are read server-side (repositories are server-only) and handed to the
+  // client header as a plain serializable list.
+  const { notifications } = getRepositories();
+  const { trader, isAuthenticated, isDemoFallback } =
+    await getCurrentIdentity();
+  const notes = await notifications.listForUser(trader.user.id);
+  const unreadCount = await notifications.countUnread(trader.user.id);
   const headerNotifications: HeaderNotification[] = notes.map((n) => ({
     id: n.id,
     type: n.type,
@@ -48,9 +52,11 @@ export default async function RootLayout({
     createdAt: n.createdAt,
   }));
   const headerUser: HeaderUser = {
-    displayName: demo.user.displayName,
-    subtitle: `${formatLeague(demo.profile.league, demo.profile.division)} · ${demo.profile.rating.toLocaleString("en-US")}`,
-    initials: initialsFor(demo.user.displayName),
+    displayName: trader.user.displayName,
+    subtitle: `${formatLeague(trader.profile.league, trader.profile.division)} · ${trader.profile.rating.toLocaleString("en-US")}`,
+    initials: initialsFor(trader.user.displayName),
+    isAuthenticated,
+    isDemoFallback,
   };
 
   return (

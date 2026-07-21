@@ -49,6 +49,7 @@ import {
   VERIFICATION_STATUSES,
   type Market,
 } from "./enums";
+import { authUsers } from "./authTables";
 
 // ---------------------------------------------------------------------------
 // Postgres enums (kept in lockstep with the TS unions in enums.ts)
@@ -103,6 +104,14 @@ export const users = pgTable("users", {
   avatarUrl: text("avatar_url"),
   /** True only for the pre-authenticated demo account (KevinV). */
   isDemoUser: boolean("is_demo_user").notNull().default(false),
+  /**
+   * Bridge-auth link: one Auth.js user ↔ one domain user (see authTables.ts).
+   * Null for seeded demo users; set by the sign-up flow. Replaced when
+   * MFFU's real identity system lands.
+   */
+  authUserId: text("auth_user_id")
+    .unique()
+    .references(() => authUsers.id, { onDelete: "set null" }),
   createdAt: timestamp("created_at", { withTimezone: true, mode: "string" })
     .notNull(),
 });

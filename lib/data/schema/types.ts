@@ -23,6 +23,12 @@ import type {
   userAchievements,
   users,
 } from "./tables";
+import type {
+  authAccounts,
+  authSessions,
+  authUsers,
+  authVerificationTokens,
+} from "./authTables";
 
 export type User = typeof users.$inferSelect;
 export type Firm = typeof firms.$inferSelect;
@@ -38,3 +44,10 @@ export type RatingHistoryEntry = typeof ratingHistory.$inferSelect;
 export type Achievement = typeof achievements.$inferSelect;
 export type UserAchievement = typeof userAchievements.$inferSelect;
 export type Notification = typeof notifications.$inferSelect;
+
+// Bridge-auth row types (Auth.js adapter tables — see authTables.ts).
+// Runtime-only; never seeded, never demo data.
+export type AuthUser = typeof authUsers.$inferSelect;
+export type AuthAccount = typeof authAccounts.$inferSelect;
+export type AuthSession = typeof authSessions.$inferSelect;
+export type AuthVerificationToken = typeof authVerificationTokens.$inferSelect;

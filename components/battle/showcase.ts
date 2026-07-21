@@ -1,7 +1,11 @@
 /**
  * Showcase-battle loader — assembles a fully serializable view model for the
- * standalone battle result + review screens from the seeded showcase battle
- * (KevinV vs DeltaHunter, battle-189) read through the repositories.
+ * standalone battle result + review screens from the CURRENT trader's latest
+ * battle, read through the repositories. Identity resolves via the lib/auth
+ * seam (getCurrentTrader): for the unauthenticated demo that is the seeded
+ * showcase battle (KevinV vs DeltaHunter, battle-189); for a signed-in
+ * trader it is their own latest battle (null until they have one — callers
+ * render an honest empty state).
  *
  * IMPORTANT (Rule 4): this module computes NO scores, ratings, or P&L. Every
  * number here was already produced by the scoring/rating/seed layers and is
@@ -16,6 +20,7 @@
 
 import type { BattleDetail } from "@/lib/data/repositories/types";
 import { getRepositories } from "@/lib/data/repositories";
+import { getCurrentTrader } from "@/lib/auth/currentUser";
 import {
   deriveReviewNarrative,
   type ReviewNarrative,
@@ -173,22 +178,23 @@ function buildPairSeries(
 }
 
 /**
- * Load and shape the seeded showcase battle (the demo user's latest) for the
- * standalone result + review screens.
+ * Load and shape the current trader's latest battle for the standalone
+ * result + review screens (the seeded showcase battle when unauthenticated;
+ * null for a fresh trader with no battles yet).
  */
 export async function loadShowcaseBattle(): Promise<ShowcaseBattleView | null> {
-  const { traders, battles } = getRepositories();
-  const demoTrader = await traders.getDemoTrader();
-  const detail = await battles.getLatestForUser(demoTrader.user.id);
+  const { battles } = getRepositories();
+  const trader = await getCurrentTrader();
+  const detail = await battles.getLatestForUser(trader.user.id);
   if (!detail) return null;
-  return buildBattleView(detail, demoTrader.user.id);
+  return buildBattleView(detail, trader.user.id);
 }
 
 /**
- * Load and shape ANY historical battle the demo user took part in, for the
- * parameterized review/result screens (Match History "Review"). Returns null
- * if the battle is missing or the demo user is not a participant, so callers
- * can fall back to the showcase battle.
+ * Load and shape ANY historical battle the current trader took part in, for
+ * the parameterized review/result screens (Match History "Review"). Returns
+ * null if the battle is missing or the current trader is not a participant,
+ * so callers can fall back to the showcase battle.
  *
  * Only the seeded showcase battle carries intra-battle telemetry; for every
  * other battle the chart/trade/timeline arrays come back empty (hasTelemetry
@@ -197,16 +203,16 @@ export async function loadShowcaseBattle(): Promise<ShowcaseBattleView | null> {
 export async function loadBattleView(
   battleId: string,
 ): Promise<ShowcaseBattleView | null> {
-  const { traders, battles } = getRepositories();
-  const demoTrader = await traders.getDemoTrader();
+  const { battles } = getRepositories();
+  const trader = await getCurrentTrader();
   const detail = await battles.getById(battleId);
   if (!detail) return null;
-  const demoUserId = demoTrader.user.id;
+  const selfUserId = trader.user.id;
   const isParticipant = detail.participants.some(
-    (p) => p.trader.user.id === demoUserId,
+    (p) => p.trader.user.id === selfUserId,
   );
   if (!isParticipant) return null;
-  return buildBattleView(detail, demoUserId);
+  return buildBattleView(detail, selfUserId);
 }
 
 /** Assemble the serializable view model from an already-loaded BattleDetail. */

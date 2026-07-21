@@ -9,6 +9,7 @@ import type { Metadata } from "next";
 import Link from "next/link";
 import { Badge } from "@/components/ui/badge";
 import { getRepositories } from "@/lib/data/repositories";
+import { getCurrentTrader } from "@/lib/auth/currentUser";
 import {
   LEAGUES,
   MARKETS,
@@ -44,7 +45,7 @@ export default async function LeaderboardsPage({
   searchParams: Promise<LeaderboardsSearchParams>;
 }) {
   const params = await searchParams;
-  const { traders, leaderboards } = getRepositories();
+  const { leaderboards } = getRepositories();
 
   // Validate params against known values; ignore anything unrecognized.
   const league = LEAGUES.includes(params.league as League)
@@ -54,8 +55,8 @@ export default async function LeaderboardsPage({
     ? (params.market as Market)
     : undefined;
 
-  const demoTrader = await traders.getDemoTrader();
-  const demoUserId = demoTrader.user.id;
+  const trader = await getCurrentTrader();
+  const demoUserId = trader.user.id;
   const [{ entries, total }, standing] = await Promise.all([
     leaderboards.query({ league, market }),
     leaderboards.getStanding(demoUserId),
@@ -89,14 +90,14 @@ export default async function LeaderboardsPage({
           <div className="flex flex-wrap items-center justify-between gap-3">
             <div className="flex items-center gap-2 text-sm">
               <TraderAvatar
-                displayName={demoTrader.user.displayName}
+                displayName={trader.user.displayName}
                 accent="demo"
                 size="sm"
               />
-              <span className="font-semibold">{demoTrader.user.displayName}</span>
+              <span className="font-semibold">{trader.user.displayName}</span>
               <LeagueBadge
-                league={demoTrader.profile.league}
-                division={demoTrader.profile.division}
+                league={trader.profile.league}
+                division={trader.profile.division}
               />
               <span className="text-muted-foreground">— your standing</span>
             </div>
@@ -110,7 +111,7 @@ export default async function LeaderboardsPage({
                 value={topPercent !== null ? `Top ${topPercent}%` : "—"}
               />
               <StatPill
-                label={`${demoTrader.profile.primaryMarket} rank`}
+                label={`${trader.profile.primaryMarket} rank`}
                 value={`#${standing.marketRank} / ${standing.marketTraders}`}
               />
             </div>

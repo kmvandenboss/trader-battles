@@ -9,6 +9,7 @@
 import type { Metadata } from "next";
 import { Badge } from "@/components/ui/badge";
 import { getRepositories } from "@/lib/data/repositories";
+import { getCurrentTrader } from "@/lib/auth/currentUser";
 import { LEAGUES, type League } from "@/lib/data/schema";
 import {
   DIVISION_SPAN,
@@ -40,8 +41,8 @@ function bandLabel(
 
 export default async function LeaguesPage() {
   const { traders } = getRepositories();
-  const demoTrader = await traders.getDemoTrader();
-  const rating = demoTrader.profile.rating;
+  const trader = await getCurrentTrader();
+  const rating = trader.profile.rating;
   const placement = leagueForRating(rating);
 
   // Trader population per league (already-stored league assignments).
@@ -89,7 +90,7 @@ export default async function LeaguesPage() {
         <div className="flex flex-wrap items-center justify-between gap-3">
           <div className="flex items-center gap-2">
             <span className="text-sm text-muted-foreground">
-              {demoTrader.user.displayName} — current placement
+              {trader.user.displayName} — current placement
             </span>
             <LeagueBadge league={placement.league} division={placement.division} />
             <span className="text-sm font-semibold tabular-nums">

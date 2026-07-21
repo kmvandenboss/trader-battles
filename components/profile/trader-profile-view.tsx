@@ -87,12 +87,14 @@ export function TraderProfileView({ view }: { view: ProfileViewModel }) {
                   {view.displayName}
                 </h1>
                 <LeagueBadge league={view.league} division={view.division} />
-                {view.isDemoUser ? (
+                {view.isSelf ? (
                   <Badge className="text-[10px]">You</Badge>
                 ) : null}
-                <Badge variant="outline" className="text-muted-foreground">
-                  Simulated Demo Data
-                </Badge>
+                {view.isSeeded ? (
+                  <Badge variant="outline" className="text-muted-foreground">
+                    Simulated Demo Data
+                  </Badge>
+                ) : null}
               </div>
               <p className="mt-1 text-sm text-muted-foreground">
                 {BATTLE_STYLE_LABELS[view.styleLabel]} style
@@ -201,8 +203,9 @@ export function TraderProfileView({ view }: { view: ProfileViewModel }) {
               />
             </div>
             <p className="mt-2 text-[11px] text-muted-foreground">
-              These are seed-authored 0–100 competitive skill signals — how a
-              trader competes, not a claim of trading returns or profitability.
+              {view.isSeeded
+                ? "These are seed-authored 0–100 competitive skill signals — how a trader competes, not a claim of trading returns or profitability."
+                : "These are 0–100 competitive skill signals (neutral 50 until battles inform them) — how a trader competes, not a claim of trading returns or profitability."}
             </p>
           </section>
 
@@ -210,9 +213,11 @@ export function TraderProfileView({ view }: { view: ProfileViewModel }) {
           <section className="rounded-xl border border-border bg-card">
             <div className="flex items-center justify-between border-b border-border/60 px-4 py-3">
               <h2 className="text-sm font-semibold">Recent battles</h2>
-              <span className="text-[10px] tracking-wide text-muted-foreground uppercase">
-                Simulated
-              </span>
+              {view.isSeeded ? (
+                <span className="text-[10px] tracking-wide text-muted-foreground uppercase">
+                  Simulated
+                </span>
+              ) : null}
             </div>
             {view.recentBattles.length === 0 ? (
               <p className="px-4 py-6 text-sm text-muted-foreground">

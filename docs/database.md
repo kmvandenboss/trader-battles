@@ -42,7 +42,7 @@ in-memory demo. Next.js loads `.env.local` automatically; the CLI commands
 | `npm run db:generate` | Regenerate SQL migrations in `drizzle/` from the schema (offline — no database needed). |
 | `npm run db:migrate` | Apply committed migrations to the database in `DATABASE_URL_UNPOOLED` (falls back to `DATABASE_URL`). |
 | `npm run db:push` | Push the schema directly without migration files (dev-branch convenience only). |
-| `npm run db:seed` | Load the deterministic demo dataset into Postgres. **Truncate-and-insert**: deletes all rows (children first) and re-inserts, so re-runs always converge to the identical state. Fails with a clear message when `DATABASE_URL` is unset. |
+| `npm run db:seed` | Load the deterministic demo dataset into Postgres. **Scoped delete-and-insert**: deletes exactly the seed dataset's rows by their seed-authored ids (children first) and re-inserts them; **real accounts and their data are never touched**, and the shared reference tables real rows point at (firms, achievements) are upserted in place. Rows from an older seed version can linger — for a clean slate, reset a fresh database/branch and re-seed. Fails with a clear message when `DATABASE_URL` is unset. |
 
 ## How the env switch works
 

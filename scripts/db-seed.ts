@@ -1,32 +1,66 @@
 /**
  * `npm run db:seed` — load the deterministic demo dataset into Postgres.
  *
- * Idempotency model: truncate-and-insert. Every run deletes all rows
- * (children first, FK-safe order) and re-inserts the seed dataset, so
- * re-running always converges to the exact same database state — the same
- * determinism guarantee the in-memory backend gets from getSeedDataset().
+ * Idempotency model: scoped delete-and-insert. Every run deletes exactly the
+ * seed dataset's rows (matched by their seed-authored ids, children first,
+ * FK-safe order) and re-inserts them, so re-running converges to the same
+ * seeded state — WITHOUT touching real rows. Real sign-ups (users with
+ * auth_user_id set, their trader profiles, and any future real battle data)
+ * are never deleted. Shared reference tables that real rows point at
+ * (firms, achievements) are upserted in place rather than deleted, so FKs
+ * from real trader profiles / user achievements always stay valid.
+ *
+ * Caveat: rows authored by an OLDER seed version whose ids are no longer in
+ * the current dataset will linger; for a truly clean slate, reset the schema
+ * (`npm run db:push` on a fresh database / Neon branch) and re-seed.
  *
  * Requires DATABASE_URL (reads .env.local / .env via scripts/load-env.ts).
  * Run `npm run db:migrate` first to create the schema. All seeded rows are
  * SIMULATED demo data — never PROVIDER_VERIFIED, no secrets stored.
  */
 
+import { getTableColumns, inArray, sql, type SQL } from "drizzle-orm";
 import { neon } from "@neondatabase/serverless";
 import { drizzle } from "drizzle-orm/neon-http";
+import type { NeonHttpDatabase } from "drizzle-orm/neon-http";
+import type { PgColumn, PgTable } from "drizzle-orm/pg-core";
 
 import * as t from "../lib/data/schema/tables";
 import { getSeedDataset, validateSeedDataset } from "../lib/data/seed";
 import { loadLocalEnv } from "./load-env";
 
-/** Keep insert statements comfortably under HTTP payload/parameter limits. */
-const INSERT_CHUNK = 100;
+/** Keep statements comfortably under HTTP payload/parameter limits. */
+const CHUNK = 100;
 
 function chunks<T>(rows: T[]): T[][] {
   const out: T[][] = [];
-  for (let i = 0; i < rows.length; i += INSERT_CHUNK) {
-    out.push(rows.slice(i, i + INSERT_CHUNK));
+  for (let i = 0; i < rows.length; i += CHUNK) {
+    out.push(rows.slice(i, i + CHUNK));
   }
   return out;
+}
+
+type Db = NeonHttpDatabase;
+
+/** Delete only the rows whose key matches a seed-authored id. */
+async function deleteSeedRows(
+  db: Db,
+  table: PgTable,
+  keyColumn: PgColumn,
+  ids: string[],
+): Promise<void> {
+  for (const c of chunks(ids)) {
+    await db.delete(table).where(inArray(keyColumn, c));
+  }
+}
+
+/** `excluded.*` update set for an upsert covering every non-key column. */
+function excludedSet(table: PgTable, keyName: string): Record<string, SQL> {
+  return Object.fromEntries(
+    Object.entries(getTableColumns(table))
+      .filter(([name]) => name !== keyName)
+      .map(([name, column]) => [name, sql.raw(`excluded."${column.name}"`)]),
+  );
 }
 
 async function main(): Promise<number> {
@@ -52,22 +86,43 @@ async function main(): Promise<number> {
 
   const db = drizzle(neon(databaseUrl));
 
-  // Delete children before parents (FK-safe), then insert parents first.
-  console.log("Clearing existing rows (truncate-and-insert idempotency)...");
-  await db.delete(t.notifications);
-  await db.delete(t.userAchievements);
-  await db.delete(t.ratingHistory);
-  await db.delete(t.battleMetricSnapshots);
-  await db.delete(t.accountSnapshots);
-  await db.delete(t.executionEvents);
-  await db.delete(t.battleParticipants);
-  await db.delete(t.battles);
-  await db.delete(t.integrationConnections);
-  await db.delete(t.tradingAccounts);
-  await db.delete(t.traderProfiles);
-  await db.delete(t.achievements);
-  await db.delete(t.firms);
-  await db.delete(t.users);
+  // Refresh ONLY seed-authored rows (children before parents, FK-safe).
+  // Real accounts and their data are preserved by construction: every delete
+  // is scoped to the seed dataset's own ids.
+  console.log("Refreshing seed-authored rows (real accounts are preserved)...");
+  const ids = <T extends { id: string }>(rows: T[]) => rows.map((r) => r.id);
+  await deleteSeedRows(db, t.notifications, t.notifications.id, ids(dataset.notifications));
+  await deleteSeedRows(db, t.userAchievements, t.userAchievements.id, ids(dataset.userAchievements));
+  await deleteSeedRows(db, t.ratingHistory, t.ratingHistory.id, ids(dataset.ratingHistory));
+  await deleteSeedRows(
+    db,
+    t.battleMetricSnapshots,
+    t.battleMetricSnapshots.id,
+    ids(dataset.battleMetricSnapshots),
+  );
+  await deleteSeedRows(db, t.accountSnapshots, t.accountSnapshots.id, ids(dataset.accountSnapshots));
+  await deleteSeedRows(db, t.executionEvents, t.executionEvents.id, ids(dataset.executionEvents));
+  await deleteSeedRows(
+    db,
+    t.battleParticipants,
+    t.battleParticipants.id,
+    ids(dataset.battleParticipants),
+  );
+  await deleteSeedRows(db, t.battles, t.battles.id, ids(dataset.battles));
+  await deleteSeedRows(
+    db,
+    t.integrationConnections,
+    t.integrationConnections.id,
+    ids(dataset.integrationConnections),
+  );
+  await deleteSeedRows(db, t.tradingAccounts, t.tradingAccounts.id, ids(dataset.tradingAccounts));
+  await deleteSeedRows(
+    db,
+    t.traderProfiles,
+    t.traderProfiles.userId,
+    dataset.traderProfiles.map((p) => p.userId),
+  );
+  await deleteSeedRows(db, t.users, t.users.id, ids(dataset.users));
 
   console.log("Inserting seed rows...");
   const log = (name: string, count: number) =>
@@ -75,8 +130,15 @@ async function main(): Promise<number> {
 
   for (const c of chunks(dataset.users)) await db.insert(t.users).values(c);
   log("users", dataset.users.length);
-  for (const c of chunks(dataset.firms)) await db.insert(t.firms).values(c);
-  log("firms", dataset.firms.length);
+  // Firms + achievements are upserted: real rows (trader profiles, earned
+  // achievements) hold FKs to them, so they must never be deleted.
+  for (const c of chunks(dataset.firms)) {
+    await db
+      .insert(t.firms)
+      .values(c)
+      .onConflictDoUpdate({ target: t.firms.id, set: excludedSet(t.firms, "id") });
+  }
+  log("firms (upsert)", dataset.firms.length);
   for (const c of chunks(dataset.traderProfiles))
     await db.insert(t.traderProfiles).values(c);
   log("trader_profiles", dataset.traderProfiles.length);
@@ -103,9 +165,16 @@ async function main(): Promise<number> {
   for (const c of chunks(dataset.ratingHistory))
     await db.insert(t.ratingHistory).values(c);
   log("rating_history", dataset.ratingHistory.length);
-  for (const c of chunks(dataset.achievements))
-    await db.insert(t.achievements).values(c);
-  log("achievements", dataset.achievements.length);
+  for (const c of chunks(dataset.achievements)) {
+    await db
+      .insert(t.achievements)
+      .values(c)
+      .onConflictDoUpdate({
+        target: t.achievements.id,
+        set: excludedSet(t.achievements, "id"),
+      });
+  }
+  log("achievements (upsert)", dataset.achievements.length);
   for (const c of chunks(dataset.userAchievements))
     await db.insert(t.userAchievements).values(c);
   log("user_achievements", dataset.userAchievements.length);
@@ -113,7 +182,9 @@ async function main(): Promise<number> {
     await db.insert(t.notifications).values(c);
   log("notifications", dataset.notifications.length);
 
-  console.log("\nPostgres seeded. Every row is SIMULATED demo data (Demo Verified).");
+  console.log(
+    "\nPostgres seeded. Every seeded row is SIMULATED demo data; real accounts untouched.",
+  );
   return 0;
 }
 

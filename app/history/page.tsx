@@ -11,6 +11,7 @@ import Link from "next/link";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { getRepositories } from "@/lib/data/repositories";
+import { getCurrentTrader } from "@/lib/auth/currentUser";
 import {
   BATTLE_TYPES,
   BATTLE_WINDOWS,
@@ -56,9 +57,12 @@ export default async function HistoryPage({
   searchParams: Promise<HistorySearchParams>;
 }) {
   const params = await searchParams;
-  const { traders, battles } = getRepositories();
-  const demoTrader = await traders.getDemoTrader();
-  const demoUserId = demoTrader.user.id;
+  const { battles } = getRepositories();
+  const trader = await getCurrentTrader();
+  const demoUserId = trader.user.id;
+  // Seeded traders (authUserId null) carry the demo-data label; a signed-in
+  // real trader's history must never be labeled simulated (Rule 1).
+  const isSeededTrader = trader.user.authUserId === null;
 
   // Full (unfiltered) list drives the opponent filter options.
   const allBattles = await battles.listForUser(demoUserId);
@@ -121,12 +125,14 @@ export default async function HistoryPage({
             <h1 className="text-2xl font-semibold tracking-tight">
               Match history
             </h1>
-            <Badge variant="outline" className="text-muted-foreground">
-              Simulated Demo Data
-            </Badge>
+            {isSeededTrader ? (
+              <Badge variant="outline" className="text-muted-foreground">
+                Simulated Demo Data
+              </Badge>
+            ) : null}
           </div>
           <p className="mt-1 text-sm text-muted-foreground">
-            Every battle {demoTrader.user.displayName} has completed this
+            Every battle {trader.user.displayName} has completed this
             season. Open any battle for the full review.
           </p>
         </div>
@@ -188,7 +194,9 @@ export default async function HistoryPage({
       <section className="overflow-hidden rounded-xl border border-border bg-card">
         {rows.length === 0 ? (
           <p className="px-4 py-12 text-center text-sm text-muted-foreground">
-            No battles match these filters.
+            {allBattles.length === 0
+              ? "No battles yet. Once you compete, every battle lands here with its full review."
+              : "No battles match these filters."}
           </p>
         ) : (
           <div className="overflow-x-auto">

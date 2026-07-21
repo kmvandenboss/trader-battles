@@ -2,16 +2,19 @@
 
 /**
  * Primary navigation shell. Sticky top bar: wordmark, section links with
- * active state, and the pre-authenticated demo user chip. Links collapse to a
- * horizontally scrollable row on small screens (desktop-first, still usable
- * on mobile).
+ * active state, and the current-user chip (session trader, or the demo
+ * fallback with a subtle hint + sign-in affordance). Identity is resolved
+ * server-side through the lib/auth seam and passed in as a plain prop —
+ * this component never touches the session or repositories. Links collapse
+ * to a horizontally scrollable row on small screens.
  */
 
 import Link from "next/link";
 import { usePathname } from "next/navigation";
-import { Swords } from "lucide-react";
+import { LogOut, Swords } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { NAV_ITEMS } from "@/components/layout/nav-items";
+import { signOutAction } from "@/lib/auth/actions";
 import {
   NotificationsMenu,
   type HeaderNotification,
@@ -22,13 +25,17 @@ function isActive(pathname: string, href: string): boolean {
   return pathname === href || pathname.startsWith(`${href}/`);
 }
 
-/** The pre-authenticated demo user, resolved server-side and passed in. */
+/** The current user (session trader or demo fallback), resolved server-side. */
 export interface HeaderUser {
   displayName: string;
   /** e.g. "Gold II · 1,684" — already-formatted league + rating. */
   subtitle: string;
   /** Avatar initials, e.g. "KV". */
   initials: string;
+  /** True when a session exists — shows the sign-out control. */
+  isAuthenticated: boolean;
+  /** True when the chip shows the seeded demo trader, not a signed-in user. */
+  isDemoFallback: boolean;
 }
 
 interface SiteHeaderProps {
@@ -98,7 +105,14 @@ export function SiteHeader({
             className="flex items-center gap-2.5 rounded-full transition-opacity hover:opacity-80"
           >
             <div className="hidden text-right leading-tight md:block">
-              <p className="text-sm font-medium">{user.displayName}</p>
+              <p className="text-sm font-medium">
+                {user.displayName}
+                {user.isDemoFallback ? (
+                  <span className="ml-1.5 rounded-sm border border-border px-1 py-px text-[10px] font-normal tracking-wide text-muted-foreground uppercase">
+                    Demo user
+                  </span>
+                ) : null}
+              </p>
               <p className="text-xs text-muted-foreground">{user.subtitle}</p>
             </div>
             <span
@@ -108,6 +122,25 @@ export function SiteHeader({
               {user.initials}
             </span>
           </Link>
+          {user.isAuthenticated ? (
+            <form action={signOutAction}>
+              <button
+                type="submit"
+                aria-label="Sign out"
+                title="Sign out"
+                className="flex size-8 items-center justify-center rounded-full text-muted-foreground transition-colors hover:bg-secondary/60 hover:text-foreground"
+              >
+                <LogOut className="size-4" aria-hidden />
+              </button>
+            </form>
+          ) : (
+            <Link
+              href="/signin"
+              className="shrink-0 text-xs font-medium text-muted-foreground underline-offset-2 transition-colors hover:text-foreground hover:underline"
+            >
+              Sign in
+            </Link>
+          )}
         </div>
       </div>
     </header>

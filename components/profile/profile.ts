@@ -1,7 +1,8 @@
 /**
  * Trader-profile loader — assembles a fully serializable view model for the
- * demo user's profile (/profile) and any seeded trader (/profile/[userId])
- * from data read through the repositories.
+ * current trader's profile (/profile — session user via the lib/auth seam,
+ * demo fallback otherwise) and any trader (/profile/[userId]) from data read
+ * through the repositories.
  *
  * IMPORTANT (Rule 4): this module computes NO scores, ratings, standings, or
  * win rates. Rating history, skill indicators, records, standings, and the
@@ -13,6 +14,7 @@
  */
 
 import { getRepositories } from "@/lib/data/repositories";
+import { getCurrentTrader } from "@/lib/auth/currentUser";
 import type {
   Achievement,
   BattleResult,
@@ -47,6 +49,10 @@ export interface ProfileBattleRow {
 export interface ProfileViewModel {
   userId: string;
   isDemoUser: boolean;
+  /** True when this profile belongs to the current trader (session or demo). */
+  isSelf: boolean;
+  /** True for seed-authored traders — drives the "Simulated Demo Data" label. */
+  isSeeded: boolean;
   displayName: string;
   league: League;
   division: Division;
@@ -79,6 +85,7 @@ async function buildProfile(userId: string): Promise<ProfileViewModel | null> {
   const { traders, leaderboards, achievements, battles } = getRepositories();
   const trader = await traders.getById(userId);
   if (!trader) return null;
+  const currentTrader = await getCurrentTrader();
 
   const [ratingHistory, standing, earned, catalog, recent] = await Promise.all([
     traders.getRatingHistory(userId),
@@ -113,6 +120,9 @@ async function buildProfile(userId: string): Promise<ProfileViewModel | null> {
   return {
     userId: trader.user.id,
     isDemoUser: trader.user.isDemoUser,
+    isSelf: trader.user.id === currentTrader.user.id,
+    // Seed-authored traders have no bridge-auth link; real sign-ups do.
+    isSeeded: trader.user.authUserId === null,
     displayName: trader.user.displayName,
     league: profile.league,
     division: profile.division,
@@ -142,14 +152,16 @@ async function buildProfile(userId: string): Promise<ProfileViewModel | null> {
   };
 }
 
-/** The pre-authenticated demo user's profile (KevinV). */
-export async function loadDemoProfile(): Promise<ProfileViewModel | null> {
-  const { traders } = getRepositories();
-  const demo = await traders.getDemoTrader();
-  return buildProfile(demo.user.id);
+/**
+ * The current trader's profile: the session user's linked trader via the
+ * lib/auth seam, or the seeded demo trader (KevinV) when unauthenticated.
+ */
+export async function loadCurrentProfile(): Promise<ProfileViewModel | null> {
+  const trader = await getCurrentTrader();
+  return buildProfile(trader.user.id);
 }
 
-/** Any seeded trader's profile; null if the user id is unknown. */
+/** Any trader's profile; null if the user id is unknown. */
 export async function loadTraderProfile(
   userId: string,
 ): Promise<ProfileViewModel | null> {

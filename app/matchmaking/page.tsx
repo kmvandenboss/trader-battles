@@ -1,8 +1,9 @@
 /**
  * /matchmaking — Find a Battle.
  *
- * Server component: reads trader profiles for the demo user and every
- * demo-queue candidate through the repositories, asks the matchmaking engine
+ * Server component: reads trader profiles for the current trader (lib/auth
+ * seam; demo fallback when unauthenticated) and every demo-queue candidate
+ * through the repositories, asks the matchmaking engine
  * which markets are matchable, and reads the scripted battle opponent's
  * identity from the mock provider's participant roster. The client flow
  * (MatchmakingFlow) then plays back an engine-precomputed MatchmakingPlan —
@@ -19,6 +20,7 @@ import {
 // consumes. Identity metadata only — no engine/scoring code runs here.
 import { OPPONENT_PARTICIPANT } from "@/lib/integrations/providers/mock/mockEventGenerator";
 import { getRepositories } from "@/lib/data/repositories";
+import { getCurrentTrader } from "@/lib/auth/currentUser";
 import { MARKETS, type Market } from "@/lib/data/schema";
 import { MatchmakingFlow } from "@/components/matchmaking/matchmaking-flow";
 import type { MatchmakingTraderCard } from "@/components/matchmaking/types";
@@ -57,10 +59,9 @@ async function buildTraderCard(
 }
 
 export default async function MatchmakingPage() {
-  const { traders } = getRepositories();
-  const demoTrader = await traders.getDemoTrader();
-  const demoCard = await buildTraderCard(demoTrader.user.id);
-  if (!demoCard) throw new Error("matchmaking: demo trader profile missing");
+  const trader = await getCurrentTrader();
+  const demoCard = await buildTraderCard(trader.user.id);
+  if (!demoCard) throw new Error("matchmaking: current trader profile missing");
 
   // Profile cards for everyone in the engine's demo queue.
   const queue = getDemoQueue();

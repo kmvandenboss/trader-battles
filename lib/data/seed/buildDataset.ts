@@ -175,6 +175,8 @@ export function buildSeedDataset(): SeedDataset {
       email: `${entry.id}@demo.traderbattles.test`,
       avatarUrl: null,
       isDemoUser: entry.id === "kevinv",
+      /** Seeded demo users never link to a bridge-auth account. */
+      authUserId: null,
       createdAt,
     };
   });

@@ -1,7 +1,8 @@
 /**
  * drizzle-kit configuration.
  *
- * - Schema source: lib/data/schema/tables.ts (the canonical domain model).
+ * - Schema source: lib/data/schema/tables.ts (the canonical domain model)
+ *   + lib/data/schema/authTables.ts (Auth.js bridge tables).
  * - Migrations out-dir: drizzle/ (committed SQL; `npm run db:generate`).
  * - Credentials: migrations prefer DATABASE_URL_UNPOOLED (Neon's DIRECT
  *   connection — required for long-running DDL) and fall back to
@@ -16,7 +17,10 @@ import { loadLocalEnv } from "./scripts/load-env";
 loadLocalEnv();
 
 export default defineConfig({
-  schema: "./lib/data/schema/tables.ts",
+  schema: [
+    "./lib/data/schema/tables.ts",
+    "./lib/data/schema/authTables.ts",
+  ],
   out: "./drizzle",
   dialect: "postgresql",
   dbCredentials: {
