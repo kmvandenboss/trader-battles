@@ -21,9 +21,13 @@ keep the 4-factor engine), Neon Postgres behind the repo interface, bridge auth 
 CSV import → settle-after-the-fact battle scoring. Phases: A scoring → B Postgres → C auth →
 D CSV import + settlement (A first; B/C parallel; D depends on all).
 
-**Phase A (v1 scoring mode) is DONE and committed** — see "Phase A decisions" below. Next up:
-**Phase B (Neon Postgres) and Phase C (bridge auth)**, which are independent and can run in
-parallel; then D.
+**Phases A (v1 scoring mode), B (Neon Postgres), and C (bridge auth) are DONE and committed** —
+see the per-phase decisions below. **Next up: connect the real Neon database, then Phase D.**
+Concretely, once Kevin provides the Neon credentials (`DATABASE_URL` pooled +
+`DATABASE_URL_UNPOOLED` direct + `AUTH_SECRET` in `.env.local`): run `npm run db:migrate`,
+`npm run db:seed`, then the deferred live smokes — Postgres-backed pages render the same seeded
+data, and sign-up → sign-in → session identity resolves through the seam. Then Phase D
+(CSV import → battle windows → settlement) per NEXT-SESSION.md.
 
 **Demo baseline (unchanged, still green):** Phase 11 DONE. Gates: `npm run lint`, `npm run build`
 (14 routes; `/scoring` + `/integrations` `○ Static`), `npm test` **142/142**, `npm run battle`
@@ -61,7 +65,9 @@ deliberate keep — the dashboard CTA is the primary entry). Everything else is 
 | 7 — Leaderboards, profiles, leagues, history | ✅ done | `4cc0e3c` |
 | 8 — Docs + full QA | ✅ done | `64dbfa1` |
 | 11 — Polish (backlog above) | ✅ done | `e0e8479` |
-| **v1 A — `PNL_V1` scoring mode** | ✅ done | _this commit_ |
+| **v1 A — `PNL_V1` scoring mode** | ✅ done | `20208f9` |
+| **v1 B — Neon Postgres repos** | ✅ done (live smoke pending creds) | `f9c4b0a` |
+| **v1 C — bridge auth (Auth.js v5)** | ✅ done (live smoke pending creds) | `f129de8` |
 
 ## Decisions made so far (beyond CLAUDE.md's locked ones)
 
@@ -397,6 +403,75 @@ deliberate keep — the dashboard CTA is the primary entry). Everything else is 
   (2) `ScoringMode` is declarative only — nothing dispatches on it yet; `settleBattle.ts` is where
   the mode gets consumed; (3) minor double-rounding (`realizedPnl` rounded before `score` sums it)
   — irrelevant for cent-denominated imports.
+
+### Phase B decisions (Neon Postgres behind the repository interface) — data-seed agent, QA'd
+
+- `lib/data/repositories/postgres/` implements the full `Repositories` interface via
+  `drizzle-orm/neon-http` + `@neondatabase/serverless`; **zero caller changes**, `types.ts`
+  untouched. `getRepositories()` selects by env: `DATABASE_URL` set → Postgres, unset → in-memory
+  seed (singleton kept; import-time safe — the Neon client is only constructed when selected, so
+  the no-env build/prerender is unaffected).
+- **Shared derivation helpers** extracted to `lib/data/repositories/derive.ts` (leaderboards,
+  standings/percentiles, history filters, firm standings, sorts) — both backends import the SAME
+  functions; the refactor was verified byte-identical (613 method-output comparisons vs the
+  pre-refactor impl). Postgres loads rows with deterministic id ordering and reuses the helpers —
+  no rankings reimplemented in SQL. Timestamps normalized to the same ISO strings in
+  `postgres/rows.ts`.
+- Migrations: `drizzle.config.ts` (schema = tables.ts + authTables.ts, out `drizzle/`, url prefers
+  `DATABASE_URL_UNPOOLED` for DDL); `drizzle/0000_init.sql` = 14 tables / 19 enums / 20 FKs.
+  Scripts: `db:generate` / `db:migrate` / `db:push` / `db:seed`; `scripts/load-env.ts` reads
+  `.env.local`/`.env` for CLI tools (no dotenv dep). `.env.example` committed (`!.env.example`
+  negation in .gitignore).
+- **`db:seed` is scoped, not truncate**: deletes exactly the seed dataset's rows by seed-authored
+  ids (children-first) and re-inserts; firms + achievements are UPSERTED because real rows FK to
+  them; real accounts/data are never touched. Older-seed leftovers require a fresh branch reset
+  (documented in `docs/database.md`).
+- Still pending Neon credentials: `db:migrate`, `db:seed`, live integration smoke.
+
+### Phase C decisions (bridge auth — Auth.js v5 + seam) — data-seed + general-purpose, QA'd
+
+- **Schema (`lib/data/schema/authTables.ts`)**: the four @auth/drizzle-adapter tables namespaced
+  `auth_users` / `auth_accounts` / `auth_sessions` / `auth_verification_tokens` (TS property names
+  match the adapter's default shape; auth timestamps `{withTimezone, mode:"date"}` unlike the
+  domain's `mode:"string"`), plus nullable `passwordHash` on auth_users. Domain `users` gained
+  nullable-UNIQUE `authUserId` FK → auth_users.id (SET NULL). Migration `drizzle/0001_*.sql`.
+  Seeded users all `authUserId: null`.
+- **Auth method: credentials (email+password, bcryptjs cost 10) + JWT sessions** (required for
+  credentials); DrizzleAdapter wired with the custom tables for later OAuth/email providers. User
+  rows are created by OUR sign-up server action, not the adapter: auth_users → domain users
+  (`user-<uuid>`) → trader_profiles with defaults **rating 1500 → Silver II** (via
+  `leagueForRating`), MFFU firm (by slug — requires `db:seed` to have run; honest error if not),
+  NQ primary, BALANCED, 0–0, skill indicators 50/50/50; then auto sign-in. neon-http has no
+  transactions → sequential inserts with best-effort unwind (documented). **MFFU account-id
+  capture deferred to Phase D** (CSV import owns account identity).
+- **The identity seam — `lib/auth/currentUser.ts`** (THE replaceable bridge): `getCurrentUser()`,
+  `getCurrentTrader()`, `getCurrentIdentity()` (adds `isAuthenticated`/`isDemoFallback`), all
+  React `cache()`d. Session → auth_users.id → users.auth_user_id → `traders.getById()`; falls back
+  to `getDemoTrader()` when unauthenticated/unlinked/auth-disabled. All 9 `getDemoTrader()` call
+  sites in app/ + components/ rewired (layout, dashboard, leagues, matchmaking, history,
+  leaderboards, showcase.ts both loaders, profile loader → `loadCurrentProfile`). Repositories
+  interface unchanged.
+- **`isAuthEnabled()` requires BOTH `DATABASE_URL` and `AUTH_SECRET`** (`lib/auth/db.ts`): missing
+  secret → logged warning + demo-fallback identity (Postgres reads keep working), never a crash.
+  `getCurrentUser()` short-circuits before `auth()` when disabled → **no cookie read → the static
+  route split is unchanged in the no-env build** (verified: `/`, `/leagues`, `/matchmaking`,
+  `/profile`, `/scoring`, `/integrations`, `/signin` static; 15 routes). `/api/auth/*` returns 404
+  in demo mode. On a DB-backed deploy these pages go dynamic (session read) — expected.
+- **Rule-1 labeling** keys off `user.authUserId === null` (seeded) — real sign-ups never get
+  "Simulated Demo Data"; header chip shows a "Demo user" tag + Sign in link on fallback, sign-out
+  when authenticated. `/signin` = tabs sign-in/create-account (server actions, useActionState,
+  disabled with honest notice when auth is off).
+- **Fresh-trader robustness**: empty states for 0 battles (dashboard latest-battle card + sparkline
+  placeholder, history empty vs no-match, neutral-50 skill copy); `tests/derive.test.ts` (4 tests)
+  covers zero-battle standings/leaderboard/history. **Tests: 171.**
+- QA (qa-reviewer): PASS with fixes — all three applied pre-commit (db:seed scoping = the HIGH;
+  AUTH_SECRET guard; auth-API 404). Noted for Phase D: leaderboard/global demo notices are
+  unconditional — on a DB deploy with real users the copy needs to become conditional ("includes
+  seeded demo traders"); prefer a positive seed marker over the null-auth-link proxy once real
+  trade data exists; sign-up email-enumeration + `trustHost` acceptable for the bridge only.
+- Deps: `next-auth@5.0.0-beta.32`, `@auth/drizzle-adapter@1.11.3`, `bcryptjs@3.0.3` — no peer-dep
+  friction on Next 16.2.10 / React 19.
+- Still pending credentials: live sign-up → sign-in → session-identity smoke.
 
 ## Known state / gotchas
 

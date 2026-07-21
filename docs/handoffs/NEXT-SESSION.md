@@ -67,7 +67,13 @@ Additive to the existing scoring engine. **Do not modify** the 4-factor componen
    dominates the bonus in a decisive battle; both-flat resolved by the cascade; mark-out counted.
 5. Gates: `npm test`, `npm run lint`. QA the scoring change.
 
-### Phase B — Neon Postgres behind the repository interface (owner: `data-seed` agent)
+### Phase B — Neon Postgres behind the repository interface (owner: `data-seed` agent) — ✅ DONE (pending live smoke)
+
+Shipped as specced (see STATE.md "Phase B decisions"): `lib/data/repositories/postgres/` via
+drizzle-orm/neon-http, shared derivation helpers in `repositories/derive.ts` (both backends, no
+drift), migration `drizzle/0000_init.sql` (14 tables / 19 enums), `db:generate/migrate/push/seed`
+scripts, `getRepositories()` env switch, `.env.example` + `docs/database.md`. QA pass. **Still
+blocked on Neon credentials:** `db:migrate`, `db:seed`, and the live integration smoke.
 
 The Drizzle schema already exists and is Postgres-shaped (`lib/data/schema/`). This is wiring + a new
 repository impl, **zero caller changes**.
@@ -88,7 +94,13 @@ repository impl, **zero caller changes**.
    this first (next.config minifier setting or Next upgrade) — verify with `next build && next start`.
 8. Gates: `npm run build`, `npm run lint`, an integration smoke against a Neon dev branch.
 
-### Phase C — Bridge auth (owner: `data-seed` for schema + `frontend-ui`/`general-purpose` for wiring)
+### Phase C — Bridge auth (owner: `data-seed` for schema + `frontend-ui`/`general-purpose` for wiring) — ✅ DONE (pending live smoke)
+
+Shipped as specced (see STATE.md "Phase C decisions"): `auth_*` adapter tables + `users.authUserId`
+link (migration `0001`), credentials + JWT via NextAuth v5, `lib/auth/currentUser.ts` seam with
+seeded-demo fallback, all `getDemoTrader()` call sites rewired, `/signin`, fresh-trader empty
+states, Rule-1 labeling off the auth link. QA pass. **Still blocked on credentials:** live
+sign-up → sign-in smoke needs `DATABASE_URL` + `AUTH_SECRET` (+ `db:migrate`/`db:seed` run first).
 
 Minimal, replaceable — this is a bridge until MFFU's real identity system owns login.
 
