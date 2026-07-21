@@ -13,11 +13,17 @@
 
 ## ▶ NEXT ACTION (for the session picking this up)
 
-**The app is feature-complete and polished.** Phase 11 (Polish) is DONE — see the Phase 11
-decisions section below. Gates green: `npm run lint`, `npm run build` (14 routes; `/scoring` +
-`/integrations` now `○ Static`), `npm test` **142/142**, `npm run battle` (KevinV winner
-confirmed), prod-server smoke (new pages 200 + real content). All items in the suggested order
-were completed, plus the Phase 4 engine-side projected-rating MEDIUM.
+**Direction change (2026-07-21): the demo is done; we are now building MFFU v1.** The phase 0–11
+demo is complete and green. New work follows **[NEXT-SESSION.md](NEXT-SESSION.md)** (ordered plan)
+against the decisions in **[../v1-divergences.md](../v1-divergences.md)**. Read CLAUDE.md's
+"Current direction — MFFU v1" section first. v1 = MFFU-only, straight-PnL scoring (`PNL_V1` mode,
+keep the 4-factor engine), Neon Postgres behind the repo interface, bridge auth (Auth.js v5), and
+CSV import → settle-after-the-fact battle scoring. Phases: A scoring → B Postgres → C auth →
+D CSV import + settlement (A first; B/C parallel; D depends on all).
+
+**Demo baseline (unchanged, still green):** Phase 11 DONE. Gates: `npm run lint`, `npm run build`
+(14 routes; `/scoring` + `/integrations` `○ Static`), `npm test` **142/142**, `npm run battle`
+(KevinV winner), prod-server smoke. The two low-value backlog items below remain deferred.
 
 If continuing: the only backlog items intentionally left are two low-value ones — the Phase 5
 `probeElapsedMs = 600_000` timing assumption in `app/matchmaking/page.tsx` (an engine-side

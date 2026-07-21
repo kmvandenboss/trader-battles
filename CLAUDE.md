@@ -20,11 +20,32 @@ The one-line pitch: *Get matched. Trade your account. Beat your opponent.*
 
 ---
 
+## Current direction — MFFU v1 (read this)
+
+The demo (phases 0–11) is **complete**. We are now evolving it into the first real **MFFU-only v1**.
+The architecture invariants below still hold — the seams we built are exactly what v1 plugs into — but
+several product decisions have changed. **Before v1 work, read [`docs/v1-divergences.md`](docs/v1-divergences.md)
+(the decisions) and [`docs/handoffs/NEXT-SESSION.md`](docs/handoffs/NEXT-SESSION.md) (the ordered plan).**
+
+The load-bearing changes:
+
+- **Single firm (MFFU)**, built toward MFFU's own system. Not a multi-firm platform.
+- **Real data via CSV import first** (direct MFFU-pipeline pull later). V1 is **settle-after-the-fact
+  (async)** — battles score *after* the window closes, not live.
+- **Straight realized-PnL scoring** with a **capped participation bonus + tiebreaker cascade** (exact
+  values in `v1-divergences.md`). The 4-factor model is **retained as a config mode**, not deleted.
+- **Real accounts** (bridge auth) and **Neon Postgres** behind the existing repository interface.
+- **Prizes, seasons, live battles, and sessions are deferred** — see the divergence doc.
+
+---
+
 ## Non-negotiable rules (do not violate)
 
-1. **All data is simulated.** Label it as `Simulated Demo Data` / `Demo Verified`. Never present demo
-   activity as real provider-verified trading. One global demo notice + contextual labels — not
-   disclaimers on every element.
+1. **Label data by its true source.** Seeded/mock demo data is `Simulated Demo Data` / `Demo Verified`
+   and must never be shown as real trading. As v1 introduces **real imported trades** (CSV), those carry
+   their honest verification status (`SELF_REPORTED` / `CLIENT_VERIFIED`) — **never** `SIMULATED` and
+   never "Demo Verified". One global demo notice + contextual labels; don't mislabel real data as demo
+   or demo as real.
 2. **No gambling language, ever.** Never use: bet, wager, jackpot, odds, stake (as in money), cash game,
    pot. Rating movement is *not* a financial stake. This is competition, not gambling.
 3. **No profitability claims.** Nothing in the product may claim or imply users will make money or become
@@ -57,7 +78,14 @@ Do not re-litigate these unless the user asks.
   pure `lib/executions/*` and `lib/scoring/*` functions the real pipeline uses. Hide this behind a small
   `BattleClock`/transport abstraction so it can later be swapped for SSE or a real event stream without
   touching UI or scoring.
-- **Deploy target:** Vercel. No paid external services required for the demo.
+- **Deploy target:** Vercel. The demo still runs with zero external services (in-memory seed).
+- **Database (v1):** **Neon Postgres**, dropped in behind the existing `Repositories` interface via the
+  Drizzle schema (no caller changes). Standard Postgres, so it migrates to MFFU's own DB later untouched.
+  `getRepositories()` picks in-memory (no `DATABASE_URL`) vs Postgres by env.
+- **Auth (v1):** **Auth.js (NextAuth v5) + Drizzle adapter** behind a thin `getCurrentUser()` seam — a
+  replaceable bridge until MFFU's real identity system owns login. The seeded demo user is the fallback.
+- **First real ingestion path (v1):** **CSV import** → the existing `lib/executions/*` pipeline. A direct
+  MFFU-pipeline pull comes later behind the same normalized-event boundary.
 
 ---
 
@@ -104,12 +132,17 @@ lib/
 **The mock provider is the single source of all demo activity.** Do not scatter dummy-data generation
 into UI components or the scoring engine.
 
-## Scoring model (default weights — must stay configurable)
+## Scoring model (must stay configurable)
 
-- Performance 40% · Risk efficiency 25% · Discipline 20% · Consistency 15%. Score is 0–100.
-- The whole point: a disciplined trader with less drawdown can beat someone who made more gross dollars
-  with reckless risk. Verify the worked examples in the brief still hold (KevinV 83.9 beats DeltaHunter
-  73.6). Full detail goes in `docs/scoring.md`.
+- **V1 active mode — `PNL_V1`:** straight realized PnL ($1 = 1 pt) + a **capped participation bonus**
+  (+5/closed trade, cap +15) + a **tiebreaker cascade** (PnL → profit factor → winning trades → took a
+  trade → first-to-green). Matched by account-size bracket. Exact values in `docs/v1-divergences.md`.
+  The bonus is a small nudge — patience still wins; only the total no-show loses.
+- **Retained mode — `NORMALIZED_4F` (the demo model):** Performance 40% · Risk 25% · Discipline 20% ·
+  Consistency 15%, score 0–100. A disciplined trader with less drawdown can beat someone who made more
+  gross dollars with reckless risk. Kept as a config mode for a later version; worked examples
+  (KevinV 83.9 vs DeltaHunter 73.6) still documented in `docs/scoring.md`. **Do not delete this engine.**
+- Scoring is server-side, isolated, and pure — the battle selects a mode; UI receives computed results.
 
 ---
 

@@ -23,7 +23,8 @@
       "Bash(curl -s http://localhost:3123/)",
       "Bash(curl -s http://localhost:3123/profile)",
       "Bash(curl -s http://localhost:3123/leagues)",
-      "Bash(curl -s http://localhost:3123/firms/mffu)"
+      "Bash(curl -s http://localhost:3123/firms/mffu)",
+      "Bash(git -C /Users/kevinvandenboss/Documents/trade-battles/trader-battles-kickoff status --short)"
     ]
   }
 }
