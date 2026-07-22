@@ -589,6 +589,12 @@ directly after the session hit its monthly spend limit mid-fix — see the QA/fi
 
 ## Known state / gotchas
 
+- **Engineering backlog lives in [`../future-work.md`](../future-work.md)** — deliberate shortcuts
+  and latent constraints to revisit. First entry (2026-07-21): the `BATTLE_WINDOW_START_UTC` /
+  `WINDOW_TIMES_UTC` time-of-day strings can't express the next-day UTC roll that the **Asia** window
+  (20:00–24:00 ET → 00:00Z next day) needs; harmless today (only the DST-aware `windowBoundsUtc()` is
+  on the live path, and no Asia battle is ever generated), bites if Asia is wired into the mock engine
+  or seed. Full detail + fix options in that doc.
 - **Worked-example arithmetic**: the brief's component scores (78/91/88/80 vs 86/63/66/71) under strict
   40/25/20/15 weights give **83.55 / 74.0**, not the brief's published 83.9/73.6. Seed validator allows
   ±1.0 tolerance on the showcase battle. Scoring engine (Phase 2) must document/handle this.

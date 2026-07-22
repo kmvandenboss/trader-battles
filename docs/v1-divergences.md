@@ -70,7 +70,10 @@
   points-based, prizes are easy to layer on later if we choose. **Before** any prizes ship: legal/
   compliance review (contest/sweepstakes law, 1099s) and collusion + multi-accounting controls.
 - **[deferred] Live / real-time head-to-head battles.** Depends on near-real-time trade + price data.
-- **[deferred] Seasons, sessions (Asia/London/NY), multiple concurrent windows.**
+- **[deferred] Seasons, London/NY sessions, multiple concurrent windows.** (The **Asia** window
+  20:00–24:00 ET now exists as a selectable battle window — live in challenges, disabled/"coming
+  soon" in matchmaking, added 2026-07-21. See the next-day-UTC caveat in
+  [`future-work.md`](future-work.md) before wiring evening windows into the mock engine or seed.)
 - **[deferred] The 4-factor normalized scoring model** — retained as config, re-enabled later.
 - **[deferred] Direct MFFU-pipeline ingestion** — CSV import first, direct pull later.
 

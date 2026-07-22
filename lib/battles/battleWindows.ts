@@ -11,6 +11,7 @@
  *   MIDDAY        11:00–13:00 ET
  *   AFTERNOON     13:00–15:30 ET
  *   FULL_SESSION  09:30–16:00 ET
+ *   ASIA          20:00–24:00 ET (evening; closes at midnight ET)
  *
  * US DST is implemented directly (no timezone library): Eastern is EDT
  * (UTC−4) from the second Sunday of March through the day BEFORE the first
@@ -37,6 +38,9 @@ const WINDOW_MINUTES_ET: Record<BattleWindow, { start: number; end: number }> = 
   MIDDAY: { start: 11 * 60, end: 13 * 60 },
   AFTERNOON: { start: 13 * 60, end: 15 * 60 + 30 },
   FULL_SESSION: { start: 9 * 60 + 30, end: 16 * 60 },
+  // Evening Asia session; end is midnight ET (minute 1440 rolls windowBoundsUtc
+  // into the next UTC day cleanly — no cross-midnight-in-ET handling needed).
+  ASIA: { start: 20 * 60, end: 24 * 60 },
 };
 
 const DATE_PATTERN = /^(\d{4})-(\d{2})-(\d{2})$/;

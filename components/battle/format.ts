@@ -19,6 +19,7 @@ export const BATTLE_WINDOW_LABELS: Record<BattleWindow, string> = {
   MIDDAY: "Midday · 11:00–13:00 ET",
   AFTERNOON: "Afternoon · 13:00–15:30 ET",
   FULL_SESSION: "Full Session · 9:30–16:00 ET",
+  ASIA: "Asia · 20:00–24:00 ET",
 };
 
 export const BATTLE_TYPE_LABELS: Record<BattleType, string> = {

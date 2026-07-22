@@ -1,0 +1,1 @@
+ALTER TYPE "public"."battle_window" ADD VALUE 'ASIA';

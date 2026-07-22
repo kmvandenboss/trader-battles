@@ -27,6 +27,7 @@ export const BATTLE_WINDOW_DURATIONS_MS: Record<BattleWindow, number> = {
   MIDDAY: 120 * 60_000, // 11:00-13:00 ET
   AFTERNOON: 150 * 60_000, // 13:00-15:30 ET
   FULL_SESSION: 390 * 60_000, // 9:30-16:00 ET
+  ASIA: 240 * 60_000, // 20:00-24:00 ET
 };
 
 /** ET window start expressed in UTC (the demo season falls inside EDT, UTC-4). */
@@ -35,6 +36,10 @@ export const BATTLE_WINDOW_START_UTC: Record<BattleWindow, string> = {
   MIDDAY: "15:00:00",
   AFTERNOON: "17:00:00",
   FULL_SESSION: "13:30:00",
+  // 20:00 EDT = 00:00 UTC the FOLLOWING day. This time-of-day string can't
+  // carry the +1-day roll; windowBoundsUtc() is the authoritative source for
+  // Asia's UTC instant. Asia is not used by the demo/mock engine yet.
+  ASIA: "00:00:00",
 };
 
 // ---------------------------------------------------------------------------

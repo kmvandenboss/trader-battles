@@ -76,6 +76,7 @@ export const BATTLE_WINDOWS = [
   "MIDDAY", // 11:00 a.m.-1:00 p.m. ET
   "AFTERNOON", // 1:00-3:30 p.m. ET
   "FULL_SESSION", // 9:30 a.m.-4:00 p.m. ET
+  "ASIA", // 8:00 p.m.-12:00 a.m. ET (evening Asia session)
 ] as const;
 export type BattleWindow = (typeof BATTLE_WINDOWS)[number];
 

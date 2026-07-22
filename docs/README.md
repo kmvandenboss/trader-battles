@@ -12,7 +12,9 @@ Documentation for the Trader Battles demo. Start with the root [README](../READM
 - [`csv-import.md`](csv-import.md) — the v1 CSV formats (trade export + 1-minute bars), per-row
   integrity checks, deterministic dedupe, window rules, and mark-out — the reference for testers.
 - [`v1-divergences.md`](v1-divergences.md) — where the real MFFU v1 diverges from the demo (the
-  product decisions).
+  product decisions), including the running list of open *product* questions.
+- [`future-work.md`](future-work.md) — the engineering backlog: known gotchas, deferred hardening,
+  and latent constraints to revisit. Append here when you take a deliberate shortcut.
 - [`integration-roadmap.md`](integration-roadmap.md) — how real trading-platform providers plug in
   behind the existing interfaces with zero changes to scoring, battles, or UI.
 - [`integrity-and-verification.md`](integrity-and-verification.md) — verification states, the

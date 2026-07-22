@@ -30,6 +30,10 @@ export const WINDOW_TIMES_UTC: Record<
   MIDDAY: { start: "15:00:00", end: "17:00:00" }, // 11:00-13:00 ET
   AFTERNOON: { start: "17:00:00", end: "19:30:00" }, // 13:00-15:30 ET
   FULL_SESSION: { start: "13:30:00", end: "20:00:00" }, // 9:30-16:00 ET
+  // 20:00-24:00 ET = 00:00-04:00 UTC the FOLLOWING day (EDT, UTC-4). These
+  // time-of-day strings can't carry the +1-day roll; the seed never generates
+  // Asia battles (pickWindow excludes it), so these are for type completeness.
+  ASIA: { start: "00:00:00", end: "04:00:00" },
 };
 
 /**
