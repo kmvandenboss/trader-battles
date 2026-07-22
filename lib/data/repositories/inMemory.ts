@@ -42,6 +42,7 @@ import {
   buildImportedExecutionRow,
   buildInviteRow,
   buildMarketBarRow,
+  buildNotificationRow,
   buildParticipantSettlementRows,
   buildScheduledBattleRows,
   buildTraderIndex,
@@ -76,6 +77,7 @@ import type {
   CreateBattleInput,
   CreateChallengeInput,
   CreateInviteInput,
+  CreateNotificationInput,
   CsvAccountOptions,
   EarnedAchievement,
   FirmRepository,
@@ -639,6 +641,16 @@ class InMemoryNotificationRepository implements NotificationRepository {
   async countUnread(userId: string): Promise<number> {
     return (this.ix.notificationsByUser.get(userId) ?? []).filter((n) => !n.read)
       .length;
+  }
+
+  async create(input: CreateNotificationInput): Promise<Notification> {
+    const notification = buildNotificationRow(
+      input,
+      `notification-${randomUUID()}`,
+      new Date().toISOString(),
+    );
+    push(this.ix.notificationsByUser, notification.userId, notification);
+    return notification;
   }
 }
 

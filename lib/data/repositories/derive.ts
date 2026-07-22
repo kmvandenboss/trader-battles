@@ -43,6 +43,7 @@ import type {
   CreateBattleInput,
   CreateChallengeInput,
   CreateInviteInput,
+  CreateNotificationInput,
   CsvAccountOptions,
   EarnedAchievement,
   FirmStandings,
@@ -619,6 +620,24 @@ export function buildChallengeRow(
     battleId: null,
     createdAt: input.createdAt ?? nowIso,
     respondedAt: null,
+  };
+}
+
+/** Notification row for NotificationRepository.create. */
+export function buildNotificationRow(
+  input: CreateNotificationInput,
+  id: string,
+  nowIso: string,
+): Notification {
+  return {
+    id,
+    userId: input.userId,
+    type: input.type,
+    title: input.title,
+    body: input.body,
+    href: input.href ?? null,
+    read: false,
+    createdAt: input.createdAt ?? nowIso,
   };
 }
 

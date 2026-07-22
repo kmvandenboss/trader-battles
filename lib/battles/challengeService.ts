@@ -85,7 +85,7 @@ export async function createChallenge(
     );
   }
 
-  return repos.challenges.create({
+  const created = await repos.challenges.create({
     challengerUserId: input.challengerUserId,
     opponentUserId: input.opponentUserId,
     sessionDate: input.sessionDate,
@@ -95,6 +95,17 @@ export async function createChallenge(
     message: input.message ?? null,
     createdAt: options.createdAt,
   });
+
+  await repos.notifications.create({
+    userId: input.opponentUserId,
+    type: "NEW_CHALLENGE",
+    title: `${challenger.user.displayName} challenged you`,
+    body: `${input.sessionDate} · ${input.battleWindow} window · ${input.accountBracket} bracket.`,
+    href: "/challenges",
+    createdAt: options.createdAt,
+  });
+
+  return created;
 }
 
 // ---------------------------------------------------------------------------

@@ -18,6 +18,7 @@ import type {
   ChallengeStatus,
   League,
   Market,
+  NotificationType,
   VerificationStatus,
 } from "../schema/enums";
 import type {
@@ -451,12 +452,24 @@ export interface AchievementRepository {
   listForUser(userId: string): Promise<EarnedAchievement[]>;
 }
 
+export interface CreateNotificationInput {
+  userId: string;
+  type: NotificationType;
+  title: string;
+  body: string;
+  /** Optional deep link target (battle, profile, leaderboard...). */
+  href?: string | null;
+  /** ISO UTC; defaults to the current time. */
+  createdAt?: string;
+}
+
 export interface NotificationRepository {
   listForUser(
     userId: string,
     options?: { unreadOnly?: boolean },
   ): Promise<Notification[]>;
   countUnread(userId: string): Promise<number>;
+  create(input: CreateNotificationInput): Promise<Notification>;
 }
 
 /** Everything the app reads through. Obtain via getRepositories(). */

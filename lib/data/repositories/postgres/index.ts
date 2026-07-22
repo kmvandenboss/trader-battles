@@ -46,6 +46,7 @@ import {
   buildImportedExecutionRow,
   buildInviteRow,
   buildMarketBarRow,
+  buildNotificationRow,
   buildParticipantSettlementRows,
   buildScheduledBattleRows,
   challengeDescComparator,
@@ -80,6 +81,7 @@ import type {
   CreateBattleInput,
   CreateChallengeInput,
   CreateInviteInput,
+  CreateNotificationInput,
   CsvAccountOptions,
   EarnedAchievement,
   FirmRepository,
@@ -973,6 +975,16 @@ class PostgresNotificationRepository implements NotificationRepository {
         and(eq(t.notifications.userId, userId), eq(t.notifications.read, false)),
       );
     return rows[0]?.value ?? 0;
+  }
+
+  async create(input: CreateNotificationInput): Promise<Notification> {
+    const notification = buildNotificationRow(
+      input,
+      `notification-${randomUUID()}`,
+      new Date().toISOString(),
+    );
+    await this.db.insert(t.notifications).values(notification);
+    return notification;
   }
 }
 
