@@ -45,6 +45,8 @@ import {
   buildNotificationRow,
   buildParticipantSettlementRows,
   buildScheduledBattleRows,
+  buildTelemetryAccountSnapshotRow,
+  buildTelemetryMetricSnapshotRow,
   buildTraderIndex,
   challengeDescComparator,
   computeStanding,
@@ -59,6 +61,7 @@ import {
   leaderboardPage,
   push,
   scheduledAscComparator,
+  selectBarsInRange,
   selectMarkPrice,
   sortFirmStandings,
   sortNotificationsDesc,
@@ -354,11 +357,12 @@ class InMemoryBattleRepository implements BattleRepository {
     if (!battle) throw new Error(`unknown battle ${input.battleId}`);
     const stored = this.ix.participantsByBattle.get(input.battleId) ?? [];
 
-    // Replace any prior FINAL snapshots for this battle (intra-battle
-    // telemetry, when present, is preserved).
-    const keptMetrics = (this.ix.metricsByBattle.get(input.battleId) ?? []).filter(
-      (m) => !m.isFinal,
-    );
+    // Idempotent re-settle: drop ALL prior metric AND account snapshots for
+    // this battle (final and non-final), then re-insert the derived finals
+    // plus any provided reconstructed telemetry. Deterministic row ids mean a
+    // re-run with the same input converges to identical rows.
+    const metrics: BattleMetricSnapshot[] = [];
+    for (const p of stored) this.ix.finalMetricsByParticipant.delete(p.id);
 
     for (const pInput of input.participants) {
       const participant = stored.find((p) => p.userId === pInput.userId);
@@ -376,7 +380,7 @@ class InMemoryBattleRepository implements BattleRepository {
         input.verificationStatus,
       );
       Object.assign(participant, rows.participant);
-      keptMetrics.push(rows.finalSnapshot);
+      metrics.push(rows.finalSnapshot);
       this.ix.finalMetricsByParticipant.set(participant.id, rows.finalSnapshot);
 
       const history = (this.ix.ratingHistoryByUser.get(pInput.userId) ?? []).filter(
@@ -396,7 +400,31 @@ class InMemoryBattleRepository implements BattleRepository {
         ),
       );
     }
-    this.ix.metricsByBattle.set(input.battleId, keptMetrics);
+
+    // Reconstructed NON-final telemetry (optional; omitted → no timeline).
+    (input.metricSnapshots ?? []).forEach((m, i) =>
+      metrics.push(
+        buildTelemetryMetricSnapshotRow(
+          m,
+          input.battleId,
+          i,
+          input.verificationStatus,
+        ),
+      ),
+    );
+    this.ix.metricsByBattle.set(input.battleId, metrics);
+
+    this.ix.accountSnapshotsByBattle.set(
+      input.battleId,
+      (input.accountSnapshots ?? []).map((s, i) =>
+        buildTelemetryAccountSnapshotRow(
+          s,
+          input.battleId,
+          i,
+          input.verificationStatus,
+        ),
+      ),
+    );
 
     battle.status = "COMPLETED";
     battle.winnerId = input.winnerId;
@@ -563,6 +591,17 @@ class InMemoryMarketDataRepository implements MarketDataRepository {
       if (ms >= fromMs && ms <= toMs) return true;
     }
     return false;
+  }
+
+  async listBars(
+    instrument: Market,
+    fromIso: string,
+    toIso: string,
+  ): Promise<MarketBar[]> {
+    const bars = [...this.ix.marketBars.values()].filter(
+      (b) => b.instrument === instrument,
+    );
+    return selectBarsInRange(bars, fromIso, toIso);
   }
 }
 

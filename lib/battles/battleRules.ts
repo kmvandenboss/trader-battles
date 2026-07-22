@@ -108,3 +108,42 @@ export interface BattleRuleConfig {
 export function severeDrawdownThresholdFor(limits: BattleRiskLimits): number {
   return limits.permittedRisk * SEVERE_DRAWDOWN_FRACTION;
 }
+
+// ---------------------------------------------------------------------------
+// Bracket → risk limits (v1 4-factor insight reconstruction)
+// ---------------------------------------------------------------------------
+
+/**
+ * Risk limits by account-size bracket, used ONLY to feed the retained
+ * 4-factor engine when reconstructing v1 telemetry for INSIGHT (the PNL_V1
+ * outcome never consults these). Values scale off MFFU's 50K Rapid demo plan
+ * ($1,250 permitted risk, 5 contracts) — a defensible per-bracket default
+ * until real per-account plan data flows in behind this same shape.
+ *
+ * PLUG-IN POINT FOR REAL INTEGRATIONS: replace this table with the account's
+ * actual prop-firm plan limits; everything downstream already consumes
+ * `BattleRiskLimits`.
+ */
+export const BRACKET_RISK_LIMITS: Record<string, BattleRiskLimits> = {
+  "25K": { permittedRisk: 625, dailyLossLimit: 625, maxContracts: 3 },
+  "50K": { permittedRisk: 1250, dailyLossLimit: 1250, maxContracts: 5 },
+  "100K": { permittedRisk: 2500, dailyLossLimit: 2500, maxContracts: 10 },
+  "150K": { permittedRisk: 3750, dailyLossLimit: 3750, maxContracts: 15 },
+};
+
+/** Fallback when a battle's bracket is null/unmatched (mirrors 50K Rapid). */
+export const DEFAULT_BRACKET_RISK_LIMITS: BattleRiskLimits =
+  MFFU_50K_RAPID.limits;
+
+/**
+ * Resolve the `BattleRiskLimits` for an account-size bracket label
+ * (case-insensitive, whitespace-trimmed). Unknown/absent brackets fall back
+ * to the 50K Rapid default so scoring never divides by an undefined budget.
+ */
+export function riskLimitsForBracket(
+  bracket: string | null | undefined,
+): BattleRiskLimits {
+  if (!bracket) return DEFAULT_BRACKET_RISK_LIMITS;
+  const normalized = bracket.trim().toUpperCase();
+  return BRACKET_RISK_LIMITS[normalized] ?? DEFAULT_BRACKET_RISK_LIMITS;
+}

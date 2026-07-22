@@ -45,6 +45,8 @@ import {
 import { ImportTradesCard } from "@/components/battle-v1/import-trades-card";
 import { MarketBarsCard } from "@/components/battle-v1/market-bars-card";
 import { SettleCard } from "@/components/battle-v1/settle-card";
+import { buildV1BattleReport } from "@/components/battle-v1/report";
+import { BattleReportSection } from "@/components/battle-v1/battle-report-section";
 
 export const metadata: Metadata = {
   title: "Battle",
@@ -194,6 +196,18 @@ export default async function BattlePage({
       toSettledView(ordered[1], "opponent"),
     ];
   }
+
+  // Detailed report + replay for settled PNL_V1 battles carrying telemetry.
+  // Self-first ordering mirrors settledViews; spectators default to the first
+  // participant. buildV1BattleReport computes nothing — it shapes persisted
+  // telemetry read from the repositories (Rule 4).
+  const report =
+    detail && isPnlV1
+      ? buildV1BattleReport(
+          detail,
+          isParticipant ? selfId : detail.participants[0].trader.user.id,
+        )
+      : null;
   const winnerName = battle.winnerId
     ? (scheduled.participants.find(
         (p) => p.participant.userId === battle.winnerId,
@@ -252,6 +266,10 @@ export default async function BattlePage({
           ))}
         </div>
       )}
+
+      {report && report.hasTelemetry ? (
+        <BattleReportSection report={report} />
+      ) : null}
 
       {isCompleted && !isPnlV1 && isParticipant ? (
         <section className="rounded-xl border border-border bg-card p-5">

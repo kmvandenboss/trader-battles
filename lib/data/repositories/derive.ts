@@ -37,6 +37,7 @@ import type {
 import type { BattleResult, League, Market } from "../schema/enums";
 import { leagueForRating } from "../leagues";
 import type {
+  AccountSnapshotInput,
   BattleDetail,
   BattleHistoryFilter,
   BattleSummary,
@@ -52,6 +53,7 @@ import type {
   LeaderboardQuery,
   MarketBarInput,
   MarkPrice,
+  MetricSnapshotInput,
   ParticipantSettlementInput,
   ParticipantSummary,
   SettledBattleParticipant,
@@ -523,6 +525,30 @@ export function selectMarkPrice(
 }
 
 /**
+ * Bars with fromIso <= barStart <= toIso, chronological (barStart asc, id asc
+ * as a deterministic tiebreak). Both backends use this exact predicate + order
+ * so MarketDataRepository.listBars behaves identically in-memory and on
+ * Postgres. Pure — bounds inclusive on both ends.
+ */
+export function selectBarsInRange(
+  bars: readonly MarketBar[],
+  fromIso: string,
+  toIso: string,
+): MarketBar[] {
+  const fromMs = Date.parse(fromIso);
+  const toMs = Date.parse(toIso);
+  return bars
+    .filter((bar) => {
+      const ms = Date.parse(bar.barStart);
+      return ms >= fromMs && ms <= toMs;
+    })
+    .sort(
+      (a, b) =>
+        a.barStart.localeCompare(b.barStart) || a.id.localeCompare(b.id),
+    );
+}
+
+/**
  * Row builders for the v1 write surface. Both backends persist EXACTLY
  * these rows; only id generation and storage differ.
  */
@@ -776,11 +802,13 @@ export function buildParticipantSettlementRows(
     maximumDrawdown: input.maximumDrawdown,
     tradeCount: input.tradeCount,
     riskUtilization: 0,
-    // PNL_V1 has no 4-factor components; zeros keep the row shape valid.
-    performanceScore: 0,
-    riskEfficiencyScore: 0,
-    disciplineScore: 0,
-    consistencyScore: 0,
+    // FINAL 4-factor components — INSIGHT ONLY, they do not affect the PNL_V1
+    // outcome. Populated from reconstruction when available; 0 otherwise
+    // (no-bars fallback / non-reconstructed battles).
+    performanceScore: input.performanceScore ?? 0,
+    riskEfficiencyScore: input.riskEfficiencyScore ?? 0,
+    disciplineScore: input.disciplineScore ?? 0,
+    consistencyScore: input.consistencyScore ?? 0,
     totalBattleScore: input.finalScore,
     isFinal: true,
     timestamp: endTime,
@@ -796,6 +824,74 @@ export function buildParticipantSettlementRows(
     createdAt: endTime,
   };
   return { participant, finalSnapshot, ratingEntry };
+}
+
+/**
+ * Source provider stamped on reconstructed v1 telemetry snapshots. It matches
+ * the provider the imported CSV execution events carry ("csv") so account
+ * snapshots read back with the same honest, self-reported provenance as the
+ * trades they were reconstructed from — never SIMULATED / mock.
+ */
+export const IMPORTED_TELEMETRY_SOURCE_PROVIDER: ExecutionEvent["sourceProvider"] =
+  "csv";
+
+/**
+ * A NON-final account_snapshots row from reconstructed v1 telemetry. The id
+ * is deterministic per (battle, account, index) so a re-settlement's
+ * delete+insert converges to identical rows. `index` is the row's position in
+ * the settlement's chronological accountSnapshots array (globally unique).
+ */
+export function buildTelemetryAccountSnapshotRow(
+  input: AccountSnapshotInput,
+  battleId: string,
+  index: number,
+  verificationStatus: Battle["verificationStatus"],
+): AccountSnapshot {
+  return {
+    id: `as-${battleId}-${input.tradingAccountId}-${index}`,
+    tradingAccountId: input.tradingAccountId,
+    battleId,
+    balance: input.balance,
+    equity: input.equity,
+    realizedPnl: input.realizedPnl,
+    unrealizedPnl: input.unrealizedPnl,
+    openPosition: input.openPosition,
+    drawdown: input.drawdown,
+    timestamp: input.timestamp,
+    sourceProvider: IMPORTED_TELEMETRY_SOURCE_PROVIDER,
+    verificationStatus,
+  };
+}
+
+/**
+ * A NON-final battle_metric_snapshots row from reconstructed v1 telemetry.
+ * The id is deterministic per (battle, participant, index) and cannot collide
+ * with the final snapshot's `bms-<battleId>-<userId>-final` id. `index` is the
+ * row's position in the settlement's chronological metricSnapshots array.
+ */
+export function buildTelemetryMetricSnapshotRow(
+  input: MetricSnapshotInput,
+  battleId: string,
+  index: number,
+  verificationStatus: Battle["verificationStatus"],
+): BattleMetricSnapshot {
+  return {
+    id: `bms-${battleId}-${input.participantId}-${index}`,
+    battleId,
+    participantId: input.participantId,
+    netPnl: input.netPnl,
+    maximumDrawdown: input.maximumDrawdown,
+    tradeCount: input.tradeCount,
+    riskUtilization: input.riskUtilization,
+    performanceScore: input.performanceScore,
+    riskEfficiencyScore: input.riskEfficiencyScore,
+    disciplineScore: input.disciplineScore,
+    consistencyScore: input.consistencyScore,
+    totalBattleScore: input.totalBattleScore,
+    isFinal: false,
+    timestamp: input.timestamp,
+    verificationStatus,
+  };
 }
 
 /**

@@ -31,6 +31,7 @@ import type {
   ExecutionEvent,
   Firm,
   IntegrationConnection,
+  MarketBar,
   Notification,
   RatingHistoryEntry,
   TraderInvite,
@@ -49,6 +50,8 @@ import {
   buildNotificationRow,
   buildParticipantSettlementRows,
   buildScheduledBattleRows,
+  buildTelemetryAccountSnapshotRow,
+  buildTelemetryMetricSnapshotRow,
   challengeDescComparator,
   computeStanding,
   deriveEarnedAchievements,
@@ -514,15 +517,16 @@ class PostgresBattleRepository implements BattleRepository {
     // leaves the battle SETTLING and the settlement safely re-runnable:
     // every row id below is deterministic per (battle, user)).
 
-    // Replace prior settlement snapshot/rating rows for this battle.
+    // Replace prior settlement rows for this battle. Idempotent re-settle
+    // drops ALL metric snapshots (final AND non-final telemetry) plus ALL
+    // account snapshots for this battle, then re-inserts the finals in the
+    // loop below and the provided reconstructed telemetry after it.
     await this.db
       .delete(t.battleMetricSnapshots)
-      .where(
-        and(
-          eq(t.battleMetricSnapshots.battleId, input.battleId),
-          eq(t.battleMetricSnapshots.isFinal, true),
-        ),
-      );
+      .where(eq(t.battleMetricSnapshots.battleId, input.battleId));
+    await this.db
+      .delete(t.accountSnapshots)
+      .where(eq(t.accountSnapshots.battleId, input.battleId));
     await this.db
       .delete(t.ratingHistory)
       .where(eq(t.ratingHistory.battleId, input.battleId));
@@ -568,6 +572,30 @@ class PostgresBattleRepository implements BattleRepository {
         .update(t.traderProfiles)
         .set(updated)
         .where(eq(t.traderProfiles.userId, pInput.userId));
+    }
+
+    // Reconstructed NON-final telemetry (optional; omitted → no timeline).
+    const metricRows = (input.metricSnapshots ?? []).map((m, i) =>
+      buildTelemetryMetricSnapshotRow(
+        m,
+        input.battleId,
+        i,
+        input.verificationStatus,
+      ),
+    );
+    for (const c of chunks(metricRows)) {
+      await this.db.insert(t.battleMetricSnapshots).values(c);
+    }
+    const accountSnapshotRows = (input.accountSnapshots ?? []).map((s, i) =>
+      buildTelemetryAccountSnapshotRow(
+        s,
+        input.battleId,
+        i,
+        input.verificationStatus,
+      ),
+    );
+    for (const c of chunks(accountSnapshotRows)) {
+      await this.db.insert(t.accountSnapshots).values(c);
     }
 
     await this.db
@@ -846,6 +874,25 @@ class PostgresMarketDataRepository implements MarketDataRepository {
       )
       .limit(1);
     return rows.length > 0;
+  }
+
+  async listBars(
+    instrument: Market,
+    fromIso: string,
+    toIso: string,
+  ): Promise<MarketBar[]> {
+    const rows = await this.db
+      .select()
+      .from(t.marketBars)
+      .where(
+        and(
+          eq(t.marketBars.instrument, instrument),
+          gte(t.marketBars.barStart, new Date(fromIso).toISOString()),
+          lte(t.marketBars.barStart, new Date(toIso).toISOString()),
+        ),
+      )
+      .orderBy(asc(t.marketBars.barStart), asc(t.marketBars.id));
+    return rows.map(mapMarketBar);
   }
 }
 

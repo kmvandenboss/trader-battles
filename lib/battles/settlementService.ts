@@ -41,6 +41,11 @@ import {
   type SettleBattleResult,
   type SettlementParticipantInput,
 } from "./settleBattle";
+import {
+  reconstructBattleTelemetry,
+  type ReconstructParticipantInput,
+} from "./reconstructBattleTelemetry";
+import type { MarketBar } from "@/lib/data/schema";
 import { ServiceError } from "./serviceErrors";
 
 // ---------------------------------------------------------------------------
@@ -375,6 +380,76 @@ export async function settleScheduledBattle(
     window: { startAt: scheduledStart, endAt: scheduledEnd },
     accountBracket,
     participants,
+  });
+
+  // --- v1 telemetry reconstruction (INSIGHT ONLY; never changes the PNL_V1
+  // outcome above). Replays the classified window activity minute-by-minute
+  // over the imported OHLCV bars to produce the rich report + replay. Bars
+  // flow through the SERVICE, not through the pure settleBattle. If bars are
+  // missing for a participant's instrument, reconstruction degrades to the
+  // aggregate view (empty snapshots, zeroed insight components).
+  const barsByInstrument: Partial<Record<Market, MarketBar[]>> = {};
+  for (const instrument of instruments) {
+    barsByInstrument[instrument] = await repos.marketData.listBars(
+      instrument,
+      scheduledStart,
+      scheduledEnd,
+    );
+  }
+
+  const reconstructParticipants = settlement.participants.map((o) => {
+    const row: ReconstructParticipantInput = {
+      userId: o.userId,
+      participantId: `bp-${input.battleId}-${o.userId}`,
+      tradingAccountId: o.tradingAccountId,
+      countedTrades: o.countedTrades,
+      openAtBuzzerTrades: o.openAtBuzzerTrades,
+      openPositionAtClose: o.openPositionAtClose,
+      markPrices,
+    };
+    return row;
+  }) as [ReconstructParticipantInput, ReconstructParticipantInput];
+
+  const telemetry = reconstructBattleTelemetry({
+    window: { startAt: scheduledStart, endAt: scheduledEnd },
+    accountBracket,
+    barsByInstrument,
+    participants: reconstructParticipants,
+  });
+
+  // Merge telemetry into the settlement input BEFORE persisting (one
+  // idempotent saveSettlement call). The final 4-factor components ride on
+  // each ParticipantSettlementInput; account + non-final metric snapshots go
+  // on the settlement input arrays.
+  settlement.settlementInput.accountSnapshots = telemetry.participants.flatMap(
+    (t) => t.accountSnapshots,
+  );
+  settlement.settlementInput.metricSnapshots = telemetry.participants.flatMap(
+    (t) => t.metricSnapshots,
+  );
+  telemetry.participants.forEach((t, index) => {
+    const row = settlement.settlementInput.participants[index];
+    row.performanceScore = t.finalComponents.performanceScore;
+    row.riskEfficiencyScore = t.finalComponents.riskEfficiencyScore;
+    row.disciplineScore = t.finalComponents.disciplineScore;
+    row.consistencyScore = t.finalComponents.consistencyScore;
+
+    // EQUALITY INVARIANT: the reconstructed running PNL_V1 score at the buzzer
+    // must equal the persisted finalScore (realized + buzzer mark-out +
+    // bonus). Divergence means the replay drifted from the authoritative
+    // scoring path — settle anyway, but surface it in dev. Not a prod throw:
+    // telemetry is INSIGHT ONLY and must never block a real settlement.
+    const expected = settlement.participants[index].score.score;
+    if (
+      process.env.NODE_ENV !== "production" &&
+      Math.abs(t.finalRunningScore - expected) > 0.01
+    ) {
+      console.warn(
+        `[settlement] telemetry buzzer score ${t.finalRunningScore} != ` +
+          `finalScore ${expected} for participant ${reconstructParticipants[index].userId} ` +
+          `(battle ${input.battleId}) — reconstruction drifted from PNL_V1 scoring.`,
+      );
+    }
   });
 
   await repos.battles.saveSettlement(settlement.settlementInput);

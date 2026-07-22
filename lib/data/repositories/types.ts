@@ -31,6 +31,7 @@ import type {
   ExecutionEvent,
   Firm,
   IntegrationConnection,
+  MarketBar,
   Notification,
   RatingHistoryEntry,
   TraderInvite,
@@ -211,6 +212,60 @@ export interface ParticipantSettlementInput {
   /** For the final metric snapshot row. */
   maximumDrawdown: number;
   tradeCount: number;
+  /**
+   * FINAL 4-factor component scores (0-100) carried onto the final metric
+   * snapshot for INSIGHT ONLY — they do NOT affect the PNL_V1 outcome. All
+   * default to 0 when absent (no-bars fallback / non-reconstructed battles).
+   */
+  performanceScore?: number;
+  riskEfficiencyScore?: number;
+  disciplineScore?: number;
+  consistencyScore?: number;
+}
+
+/**
+ * A NON-final account snapshot produced by v1 telemetry reconstruction.
+ * Attributed to a participant via `tradingAccountId`. saveSettlement stamps
+ * `sourceProvider` + `verificationStatus` consistently (they are NOT carried
+ * here — they always match the imported execution events / the settlement).
+ * Mirrors the account_snapshots table columns (lib/data/schema/tables.ts).
+ */
+export interface AccountSnapshotInput {
+  tradingAccountId: string;
+  /** ISO UTC of the snapshot instant. */
+  timestamp: string;
+  balance: number;
+  equity: number;
+  realizedPnl: number;
+  unrealizedPnl: number;
+  /** Signed contracts: positive long, negative short, 0 flat. */
+  openPosition: number;
+  drawdown: number;
+}
+
+/**
+ * A NON-final battle metric snapshot produced by v1 telemetry
+ * reconstruction. `participantId` is the deterministic battle_participants id
+ * (`bp-<battleId>-<userId>`, see derive.buildScheduledBattleRows).
+ * saveSettlement derives the FINAL snapshot itself; only NON-final rows are
+ * supplied here. `totalBattleScore` is the running PNL_V1 outcome score
+ * (dollars), while the four component fields carry the 0-100 4-factor insight.
+ * Mirrors the battle_metric_snapshots table columns (minus isFinal, which is
+ * always false here).
+ */
+export interface MetricSnapshotInput {
+  participantId: string;
+  /** ISO UTC of the snapshot instant. */
+  timestamp: string;
+  netPnl: number;
+  maximumDrawdown: number;
+  tradeCount: number;
+  riskUtilization: number;
+  performanceScore: number;
+  riskEfficiencyScore: number;
+  disciplineScore: number;
+  consistencyScore: number;
+  totalBattleScore: number;
 }
 
 /** Input for BattleRepository.saveSettlement — one call persists everything. */
@@ -226,6 +281,18 @@ export interface BattleSettlementInput {
   /** SELF_REPORTED / CLIENT_VERIFIED for imported data — never SIMULATED. */
   verificationStatus: VerificationStatus;
   participants: [ParticipantSettlementInput, ParticipantSettlementInput];
+  /**
+   * Optional reconstructed telemetry (v1): NON-final account snapshots for
+   * all participants, chronological. Omitted → settlement behaves exactly as
+   * before (no intra-battle account timeline persisted).
+   */
+  accountSnapshots?: AccountSnapshotInput[];
+  /**
+   * Optional reconstructed telemetry (v1): NON-final metric snapshots only
+   * (the final snapshot per participant is always derived by saveSettlement).
+   * Omitted → settlement behaves exactly as before.
+   */
+  metricSnapshots?: MetricSnapshotInput[];
 }
 
 export interface ImportExecutionsResult {
@@ -431,6 +498,18 @@ export interface MarketDataRepository {
   getMarkPrice(instrument: Market, atIso: string): Promise<MarkPrice | null>;
   /** Whether any bar exists with fromIso <= barStart <= toIso. */
   hasBars(instrument: Market, fromIso: string, toIso: string): Promise<boolean>;
+  /**
+   * All bars for an instrument with fromIso <= barStart <= toIso, in
+   * chronological order (barStart ascending; id ascending as a deterministic
+   * tiebreak — though one bar per (instrument, barStart) precludes ties).
+   * Empty when none. Used by v1 telemetry reconstruction to replay
+   * mark-to-market minute-by-minute over a battle window.
+   */
+  listBars(
+    instrument: Market,
+    fromIso: string,
+    toIso: string,
+  ): Promise<MarketBar[]>;
 }
 
 export interface LeaderboardRepository {

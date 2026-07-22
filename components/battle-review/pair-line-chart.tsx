@@ -23,16 +23,21 @@ import {
 import type { PairPoint } from "@/components/battle/showcase";
 import { TRADER_COLORS } from "@/components/battle/trader-avatar";
 import {
+  formatPoints,
   formatScore,
   formatSignedUsd,
   formatUsd,
   sessionTimeAt,
 } from "@/components/battle/format";
 
-type ValueKind = "pnl" | "drawdown" | "score";
+// "points" (added additively for v1) formats the PNL_V1 running score, which
+// is DOLLARS-points (can be negative, no 0-100 cap) — distinct from the demo's
+// 0-100 "score".
+type ValueKind = "pnl" | "drawdown" | "score" | "points";
 
 function formatValue(value: number, kind: ValueKind): string {
   if (kind === "score") return formatScore(value);
+  if (kind === "points") return formatPoints(value);
   if (kind === "drawdown") return formatUsd(value);
   return formatSignedUsd(value);
 }
@@ -41,6 +46,7 @@ const KIND_NOUN: Record<ValueKind, string> = {
   pnl: "Net P&L",
   drawdown: "Drawdown",
   score: "Battle score",
+  points: "Running score",
 };
 
 /** Last non-null value of a series, for the text alternative. */

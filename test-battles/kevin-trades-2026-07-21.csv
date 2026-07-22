@@ -1,0 +1,4 @@
+trading_account_id,asset,asset_code,short_long,total_contracts,open_datetime,close_datetime,seconds_held,avg_market_entry,avg_market_close,market_profit,commission_and_fees,net_profit,winner_loser,status,stage,broker
+bcbe7bd5-eb31-4582-8041-262010c7b6e7,GCQ6,GC,SHORT,1,2026-07-22T01:18:29.000000,2026-07-22T01:20:43.000000,134,4117.7,4120.2,-2.5,0.0,-250.00,LOSS,CLOSED,evaluation,Tradovate
+bcbe7bd5-eb31-4582-8041-262010c7b6e7,GCQ6,GC,LONG,1,2026-07-22T01:21:10.000000,2026-07-22T01:23:57.000000,167,4119.3,4116.4,-2.9,0.0,-290.00,LOSS,CLOSED,evaluation,Tradovate
+bcbe7bd5-eb31-4582-8041-262010c7b6e7,GCQ6,GC,LONG,1,2026-07-22T01:25:10.000000,2026-07-22T01:26:54.000000,104,4117.5,4119.5,2.0,0.0,200.00,WIN,CLOSED,evaluation,Tradovate
