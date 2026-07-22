@@ -7,9 +7,9 @@
 @theme inline {
   --color-background: var(--background);
   --color-foreground: var(--foreground);
-  --font-sans: var(--font-geist-sans);
+  --font-sans: var(--font-lexend);
   --font-mono: var(--font-geist-mono);
-  --font-heading: var(--font-geist-sans);
+  --font-heading: var(--font-lexend);
   --color-positive: var(--positive);
   --color-negative: var(--negative);
   --color-sidebar-ring: var(--sidebar-ring);
@@ -88,44 +88,45 @@
 }
 
 /*
- * Trader Battles dark theme.
- * Cool near-black neutrals, strong contrast, one restrained amber/gold accent.
- * Positive/negative tokens are for status indicators (win/loss, P&L direction).
+ * Trader Battles dark theme — MFFU brand palette.
+ * Obsidian backgrounds (#000B1E base, alternating #09172F / #0D2144 / #040A15
+ * for section rhythm), Blue primary, Gold for featured/offer surfaces, Red for
+ * LIVE/negative rows, Green for positive rows / FUNDED status.
  */
 .dark {
-  --background: oklch(0.155 0.012 255);
-  --foreground: oklch(0.94 0.006 250);
-  --card: oklch(0.195 0.014 255);
-  --card-foreground: oklch(0.94 0.006 250);
-  --popover: oklch(0.195 0.014 255);
-  --popover-foreground: oklch(0.94 0.006 250);
-  --primary: oklch(0.8 0.13 80);
-  --primary-foreground: oklch(0.2 0.04 80);
-  --secondary: oklch(0.26 0.016 255);
-  --secondary-foreground: oklch(0.94 0.006 250);
-  --muted: oklch(0.245 0.015 255);
-  --muted-foreground: oklch(0.68 0.015 250);
-  --accent: oklch(0.26 0.016 255);
-  --accent-foreground: oklch(0.94 0.006 250);
-  --destructive: oklch(0.66 0.19 25);
-  --positive: oklch(0.72 0.15 160);
-  --negative: oklch(0.66 0.19 25);
-  --border: oklch(1 0.01 255 / 10%);
-  --input: oklch(1 0.01 255 / 14%);
-  --ring: oklch(0.8 0.13 80 / 55%);
-  --chart-1: oklch(0.8 0.13 80);
-  --chart-2: oklch(0.72 0.11 210);
-  --chart-3: oklch(0.72 0.15 160);
-  --chart-4: oklch(0.66 0.19 25);
-  --chart-5: oklch(0.62 0.02 255);
-  --sidebar: oklch(0.175 0.013 255);
-  --sidebar-foreground: oklch(0.94 0.006 250);
-  --sidebar-primary: oklch(0.8 0.13 80);
-  --sidebar-primary-foreground: oklch(0.2 0.04 80);
-  --sidebar-accent: oklch(0.26 0.016 255);
-  --sidebar-accent-foreground: oklch(0.94 0.006 250);
-  --sidebar-border: oklch(1 0.01 255 / 10%);
-  --sidebar-ring: oklch(0.8 0.13 80 / 55%);
+  --background: #000b1e;
+  --foreground: #eaf1fc;
+  --card: #09172f;
+  --card-foreground: #eaf1fc;
+  --popover: #0d2144;
+  --popover-foreground: #eaf1fc;
+  --primary: #3a82f7;
+  --primary-foreground: #f5f8ff;
+  --secondary: #0d2144;
+  --secondary-foreground: #eaf1fc;
+  --muted: #09172f;
+  --muted-foreground: #8ca3c9;
+  --accent: #f3cc81;
+  --accent-foreground: #0d2144;
+  --destructive: #f7513b;
+  --positive: #83f73b;
+  --negative: #f7513b;
+  --border: rgb(255 255 255 / 8%);
+  --input: rgb(255 255 255 / 14%);
+  --ring: rgb(58 130 247 / 55%);
+  --chart-1: #3a82f7;
+  --chart-2: #f3cc81;
+  --chart-3: #83f73b;
+  --chart-4: #f7513b;
+  --chart-5: #8ca3c9;
+  --sidebar: #040a15;
+  --sidebar-foreground: #eaf1fc;
+  --sidebar-primary: #3a82f7;
+  --sidebar-primary-foreground: #f5f8ff;
+  --sidebar-accent: #0d2144;
+  --sidebar-accent-foreground: #eaf1fc;
+  --sidebar-border: rgb(255 255 255 / 8%);
+  --sidebar-ring: rgb(58 130 247 / 55%);
 }
 
 @utility scrollbar-none {

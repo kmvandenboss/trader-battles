@@ -1,5 +1,5 @@
 import type { Metadata } from "next";
-import { Geist, Geist_Mono } from "next/font/google";
+import { Lexend, Geist_Mono } from "next/font/google";
 import "./globals.css";
 import { DemoNotice } from "@/components/layout/demo-notice";
 import { SiteHeader, type HeaderUser } from "@/components/layout/site-header";
@@ -9,8 +9,8 @@ import { getCurrentIdentity } from "@/lib/auth/currentUser";
 import type { HeaderNotification } from "@/components/layout/notifications-menu";
 import { formatLeague, initialsFor } from "@/components/battle/format";
 
-const geistSans = Geist({
-  variable: "--font-geist-sans",
+const lexend = Lexend({
+  variable: "--font-lexend",
   subsets: ["latin"],
 });
 
@@ -62,7 +62,7 @@ export default async function RootLayout({
   return (
     <html
       lang="en"
-      className={`dark ${geistSans.variable} ${geistMono.variable} h-full antialiased`}
+      className={`dark ${lexend.variable} ${geistMono.variable} h-full antialiased`}
     >
       <body className="flex min-h-svh flex-col bg-background text-foreground">
         <DemoNotice />
